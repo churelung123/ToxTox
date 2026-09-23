@@ -181,20 +181,23 @@ module.exports = async (req, res) => {
                 });
             }
 
-            const result = command.executeServerless
-                ? await command.executeServerless(interaction)
-                : await executeLegacyCommand(
-                    command,
-                    interaction
-                );
-
-            return res.status(200).json({
-                type: 4,
-                data:
-                    typeof result === 'string'
-                        ? { content: result }
-                        : result
+            // 1. Phản hồi ngay type: 5 cho Discord để chống timeout 3 giây (tránh bot ngủ đông)
+            res.status(200).json({
+                type: 5
             });
+
+            // 2. Chạy ngầm lệnh ở background, sau đó dùng Webhook đẩy kết quả về
+            try {
+                if (command.executeServerless) {
+                    await command.executeServerless(interaction);
+                } else {
+                    await executeLegacyCommandAsync(command, interaction);
+                }
+            } catch (err) {
+                console.error(`[BACKGROUND COMMAND ERROR - ${name}]:`, err);
+            }
+
+            return;
         }
 
         // --------------------------------------------------------
@@ -600,138 +603,61 @@ module.exports = async (req, res) => {
 // LEGACY COMMAND ADAPTER
 // ============================================================
 
-async function executeLegacyCommand(
+// ============================================================
+// LEGACY COMMAND ASYNC ADAPTER (Dành cho deferReply / editReply)
+// ============================================================
+
+async function executeLegacyCommandAsync(
     command,
     interaction
 ) {
-
-    let responsePayload = null;
-
-    // ----------------------------------------------------------
-    // LẤY GUILD DISCORD.JS THẬT
-    // ----------------------------------------------------------
-
     let guild = null;
 
     if (interaction.guild_id) {
-        guild = await getDiscordGuild(
-            interaction.guild_id
-        );
+        try {
+            guild = await getDiscordGuild(interaction.guild_id);
+        } catch (e) {
+            console.error('Không thể fetch guild:', e);
+        }
     }
 
-    // ----------------------------------------------------------
-    // MOCK INTERACTION
-    // ----------------------------------------------------------
-
     const mockInteraction = {
-
         ...interaction,
-
-        // Discord.js Client thật
         client: await getDiscordClient(),
-
-        // Discord.js Guild thật
         guild,
-
-        // Các thông tin tương thích
-        guildId:
-            interaction.guild_id,
-
+        guildId: interaction.guild_id,
         channel: guild
-            ? guild.channels.cache.get(
-                interaction.channel_id
-            ) || {
-                id: interaction.channel_id
-            }
-            : {
-                id: interaction.channel_id
-            },
-
-        user:
-            interaction.member?.user ||
-            interaction.user,
-
-        member:
-            interaction.member,
-
+            ? guild.channels.cache.get(interaction.channel_id) || { id: interaction.channel_id }
+            : { id: interaction.channel_id },
+        user: interaction.member?.user || interaction.user,
+        member: interaction.member,
         deferred: false,
-
         replied: false,
 
         options: {
-
             getInteger: (name) => {
-
-                const opt =
-                    interaction.data.options?.find(
-                        o => o.name === name
-                    );
-
+                const opt = interaction.data.options?.find(o => o.name === name);
                 return opt?.value;
             },
-
             getString: (name) => {
-
-                const opt =
-                    interaction.data.options?.find(
-                        o => o.name === name
-                    );
-
+                const opt = interaction.data.options?.find(o => o.name === name);
                 return opt?.value;
             },
-
             getUser: (name) => {
-
-                const opt =
-                    interaction.data.options?.find(
-                        o => o.name === name
-                    );
-
-                if (!opt) {
-                    return null;
-                }
-
-                return interaction.data.resolved
-                    ?.users?.[opt.value] || null;
+                const opt = interaction.data.options?.find(o => o.name === name);
+                if (!opt) return null;
+                return interaction.data.resolved?.users?.[opt.value] || null;
             },
-
             getAttachment: (name) => {
-
-                const opt =
-                    interaction.data.options?.find(
-                        o => o.name === name
-                    );
-
-                if (!opt) {
-                    return null;
-                }
-
-                const attachmentsObj =
-                    interaction.data.resolved
-                        ?.attachments || {};
-
-                const attachment =
-                    attachmentsObj[opt.value] ||
-                    Object.values(
-                        attachmentsObj
-                    )[0];
-
-                if (!attachment) {
-                    return null;
-                }
-
+                const opt = interaction.data.options?.find(o => o.name === name);
+                if (!opt) return null;
+                const attachmentsObj = interaction.data.resolved?.attachments || {};
+                const attachment = attachmentsObj[opt.value] || Object.values(attachmentsObj)[0];
+                if (!attachment) return null;
                 return {
                     ...attachment,
-
-                    name:
-                        attachment.name ||
-                        attachment.filename ||
-                        '',
-
-                    filename:
-                        attachment.filename ||
-                        attachment.name ||
-                        ''
+                    name: attachment.name || attachment.filename || '',
+                    filename: attachment.filename || attachment.name || ''
                 };
             }
         },
@@ -741,23 +667,33 @@ async function executeLegacyCommand(
         },
 
         async reply(options) {
-            responsePayload =
-                options;
+            await sendFollowUpOrEdit(interaction.application_id, interaction.token, options);
             this.replied = true;
         },
 
         async editReply(options) {
-            responsePayload =
-                options;
+            await sendFollowUpOrEdit(interaction.application_id, interaction.token, options);
             this.replied = true;
         }
     };
 
-    await command.execute(
-        mockInteraction
-    );
+    await command.execute(mockInteraction);
+}
 
-    return responsePayload;
+// Hàm hỗ trợ đẩy kết quả qua Webhook gốc của Discord
+async function sendFollowUpOrEdit(appId, token, options) {
+    const url = `https://discord.com/api/v10/webhooks/${appId}/${token}/messages/@original`;
+    let bodyData = typeof options === 'string' ? { content: options } : options;
+
+    try {
+        await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData)
+        });
+    } catch (err) {
+        console.error('[WEBHOOK ERROR]:', err);
+    }
 }
 
 // ============================================================
