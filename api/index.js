@@ -1,6 +1,5 @@
 // File: api/index.js
 const { verifyKey } = require('discord-interactions');
-const { pool } = require('../utils/database');
 
 // Hàm đọc raw buffer từ request
 function getRawBody(req) {
@@ -35,13 +34,14 @@ module.exports = async (req, res) => {
 
         const interaction = JSON.parse(rawBody.toString('utf-8'));
 
-        // 1. PING CHECK từ Discord Developer Portal
+        // 1. PING CHECK từ Discord Developer Portal (Trả về ngay 200, không đụng đến DB)
         if (interaction.type === 1) {
             return res.status(200).json({ type: 1 });
         }
 
-        // 2. Xử lý Slash Commands (Type 2)
+        // 2. Xử lý Slash Commands (Type 2) -> Lúc này mới load DB
         if (interaction.type === 2) {
+            const { pool } = require('../utils/database');
             const { name } = interaction.data;
 
             if (name === 'set-ket-qua') {
