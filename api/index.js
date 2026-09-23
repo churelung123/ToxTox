@@ -21,6 +21,12 @@ module.exports = async (req, res) => {
     const clientPublicKey = process.env.DISCORD_PUBLIC_KEY;
 
     if (!signature || !timestamp || !clientPublicKey) {
+        console.log({
+            hasSignature: !!signature,
+            hasTimestamp: !!timestamp,
+            hasPublicKey: !!clientPublicKey,
+        });
+
         return res.status(401).send('Missing signature or public key');
     }
 
