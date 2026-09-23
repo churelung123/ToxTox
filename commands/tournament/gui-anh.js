@@ -6,7 +6,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('gui-anh')
         .setDescription('Tải ảnh bằng chứng kết quả trận đấu để mở khóa báo cáo')
-        .addAttachmentOption(option => 
+        .addAttachmentOption(option =>
             option.setName('image')
                 .setDescription('Hình ảnh chụp màn hình kết quả trận đấu')
                 .setRequired(true)
@@ -14,7 +14,7 @@ module.exports = {
 
     async execute(interaction) {
         const channelId = interaction.channel.id;
-        
+
         const matchRes = await pool.query('SELECT * FROM matches WHERE channel_id = $1', [channelId]);
         const match = matchRes.rows[0];
 
@@ -32,7 +32,14 @@ module.exports = {
 
         const image = interaction.options.getAttachment('image');
 
-        if (!image.contentType || !image.contentType.startsWith('image/')) {
+        // Danh sách các phần mở rộng hình ảnh phổ biến
+        const validExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
+        const fileName = image.name ? image.name.toLowerCase() : '';
+        const isValidExt = validExtensions.some(ext => fileName.endsWith(ext));
+
+        const isValidContentType = image.contentType && image.contentType.startsWith('image/');
+
+        if (!isValidContentType && !isValidExt) {
             return interaction.reply({ content: '❌ File tải lên phải là hình ảnh (PNG, JPG, WEBP...)!', ephemeral: true });
         }
 
