@@ -2,16 +2,8 @@
 const { verifyKey } = require('discord-interactions');
 const { pool } = require('../utils/database');
 
-// 💡 TẮT BODY PARSER TỰ ĐỘNG CỦA VERCEL
-// Bắt buộc phải có đoạn này để Vercel không tự parse JSON, giữ raw body verify signature
-export const config = {
-    api: {
-        bodyParser: false,
-    },
-};
-
 // Hàm đọc raw buffer từ request
-async function getRawBody(req) {
+function getRawBody(req) {
     return new Promise((resolve, reject) => {
         const chunks = [];
         req.on('data', chunk => chunks.push(chunk));
@@ -103,4 +95,10 @@ module.exports = async (req, res) => {
         console.error('[DISCORD INTERACTION ERROR]:', err);
         return res.status(500).send('Internal Server Error');
     }
+};
+
+module.exports.config = {
+    api: {
+        bodyParser: false,
+    },
 };
