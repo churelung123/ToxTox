@@ -39,7 +39,20 @@ module.exports = async (req, res) => {
 
     try {
         const rawBody = await getRawBody(req);
-        const isValidRequest = verifyKey(rawBody, signature, timestamp, clientPublicKey);
+
+        console.log('RAW BODY LENGTH:', rawBody.length);
+        console.log('SIGNATURE LENGTH:', signature?.length);
+        console.log('TIMESTAMP:', timestamp);
+        console.log('PUBLIC KEY LENGTH:', clientPublicKey?.length);
+
+        const isValidRequest = await verifyKey(
+            rawBody,
+            signature,
+            timestamp,
+            clientPublicKey
+        );
+
+        console.log('VERIFY RESULT:', isValidRequest);
 
         if (!isValidRequest) {
             return res.status(401).send('Bad request signature');
