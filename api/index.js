@@ -12,12 +12,7 @@ function getRawBody(req) {
 }
 
 module.exports = async (req, res) => {
-    console.log('🔥 DISCORD REQUEST RECEIVED');
-    console.log('Method:', req.method);
-    console.log('Path:', req.url);
-    console.log('Signature:', !!req.headers['x-signature-ed25519']);
-    console.log('Timestamp:', !!req.headers['x-signature-timestamp']);
-    console.log('Public key:', !!process.env.DISCORD_PUBLIC_KEY);
+    console.log('🔥 API FUNCTION HIT', new Date().toISOString());
 
     if (req.method !== 'POST') {
         return res.status(405).send('Method Not Allowed');
