@@ -228,11 +228,18 @@ async function executeLegacyCommand(command, interaction) {
                 return interaction.data.resolved?.users?.[opt?.value];
             },
             getAttachment: (name) => {
-                const opt = interaction.data.options?.find(o => o.name === name);
+                const opt = interaction.data.options?.find(
+                    o => o.name === name
+                );
+
                 if (!opt) return null;
 
-                const attachmentsObj = interaction.data.resolved?.attachments || {};
-                const attachment = attachmentsObj[opt.value] || Object.values(attachmentsObj)[0];
+                const attachmentsObj =
+                    interaction.data.resolved?.attachments || {};
+
+                const attachment =
+                    attachmentsObj[opt.value] ||
+                    Object.values(attachmentsObj)[0];
 
                 if (!attachment) return null;
 
