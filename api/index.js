@@ -2,47 +2,61 @@
 const { verifyKey } = require('discord-interactions');
 const { pool } = require('../utils/database');
 
-// Vercel Serverless Function Config
+// 💡 TẮT BODY PARSER TỰ ĐỘNG CỦA VERCEL
+// Bắt buộc phải có đoạn này để Vercel không tự parse JSON, giữ raw body verify signature
+export const config = {
+    api: {
+        bodyParser: false,
+    },
+};
+
+// Hàm đọc raw buffer từ request
+async function getRawBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on('data', chunk => chunks.push(chunk));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', err => reject(err));
+    });
+}
+
 module.exports = async (req, res) => {
-    // 1. Chỉ nhận HTTP POST request từ Discord
     if (req.method !== 'POST') {
         return res.status(405).send('Method Not Allowed');
     }
 
-    // 2. Xác thực request từ Discord bằng Public Key
     const signature = req.headers['x-signature-ed25519'];
     const timestamp = req.headers['x-signature-timestamp'];
     const clientPublicKey = process.env.DISCORD_PUBLIC_KEY;
 
-    // Đọc raw body để verify signature
-    const chunks = [];
-    for await (const chunk of req) {
-        chunks.push(chunk);
-    }
-    const rawBody = Buffer.concat(chunks);
-
-    const isValidRequest = verifyKey(rawBody, signature, timestamp, clientPublicKey);
-    if (!isValidRequest) {
-        return res.status(401).send('Bad request signature');
+    if (!signature || !timestamp || !clientPublicKey) {
+        return res.status(401).send('Missing signature or public key');
     }
 
-    const interaction = JSON.parse(rawBody.toString());
+    try {
+        const rawBody = await getRawBody(req);
+        const isValidRequest = verifyKey(rawBody, signature, timestamp, clientPublicKey);
 
-    // 3. Xử lý Ping Check từ Discord (Bắt buộc)
-    if (interaction.type === 1) {
-        return res.status(200).json({ type: 1 });
-    }
+        if (!isValidRequest) {
+            return res.status(401).send('Bad request signature');
+        }
 
-    // 4. Xử lý các Slash Commands (Type 2)
-    if (interaction.type === 2) {
-        const { name } = interaction.data;
+        const interaction = JSON.parse(rawBody.toString('utf-8'));
 
-        // Ví dụ: Xử lý lệnh /set-ket-qua
-        if (name === 'set-ket-qua') {
-            const matchId = interaction.data.options.find(opt => opt.name === 'match_id')?.value;
-            const ketQua = interaction.data.options.find(opt => opt.name === 'ket_qua')?.value;
+        // 1. PING CHECK từ Discord Developer Portal
+        if (interaction.type === 1) {
+            return res.status(200).json({ type: 1 });
+        }
 
-            try {
+        // 2. Xử lý Slash Commands (Type 2)
+        if (interaction.type === 2) {
+            const { name } = interaction.data;
+
+            if (name === 'set-ket-qua') {
+                const options = interaction.data.options || [];
+                const matchId = options.find(opt => opt.name === 'match_id')?.value;
+                const ketQua = options.find(opt => opt.name === 'ket_qua')?.value;
+
                 const matchRes = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
                 if (matchRes.rows.length === 0) {
                     return res.status(200).json({
@@ -66,7 +80,7 @@ module.exports = async (req, res) => {
                     detailText = `🤝 Xử HÒA`;
                 } else if (ketQua === 'reset') {
                     status = 'pending';
-                    detailText = `🔄 Đã đưa trận đấu về trạng thái chờ thi đấu`;
+                    detailText = `🔄 Đã đưa trận đấu về trạng thái chờ thi đấu (Pending)`;
                 }
 
                 await pool.query(
@@ -80,15 +94,13 @@ module.exports = async (req, res) => {
                         content: `⚖️ **Trọng Tài Can Thiệp Trận Đấu #${matchId}**\n**Kết quả:** ${detailText}`
                     }
                 });
-            } catch (err) {
-                console.error(err);
-                return res.status(200).json({
-                    type: 4,
-                    data: { content: '❌ Đã xảy ra lỗi khi cập nhật CSDL PostgreSQL.' }
-                });
             }
         }
-    }
 
-    return res.status(400).send('Unknown interaction type');
+        return res.status(400).send('Unknown interaction type');
+
+    } catch (err) {
+        console.error('[DISCORD INTERACTION ERROR]:', err);
+        return res.status(500).send('Internal Server Error');
+    }
 };
