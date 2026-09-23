@@ -7,7 +7,10 @@ const {
 } = require('discord.js');
 
 const { pool } = require('../utils/database');
-const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
+const {
+    exportStandingsToExcel,
+    exportMatchesByRoundToExcel
+} = require('../utils/excelHelper');
 
 // ============================================================
 // DISCORD CLIENT CHO SERVERLESS
@@ -32,7 +35,8 @@ async function getDiscordClient() {
     }
 
     if (!discordLoginPromise) {
-        discordLoginPromise = discordClient.login(process.env.DISCORD_TOKEN)
+        discordLoginPromise = discordClient
+            .login(process.env.DISCORD_TOKEN)
             .catch(error => {
                 discordLoginPromise = null;
                 throw error;
@@ -46,7 +50,9 @@ async function getDiscordClient() {
 
 async function getDiscordGuild(guildId) {
     if (!guildId) {
-        throw new Error('Không tìm thấy guild_id từ Discord interaction');
+        throw new Error(
+            'Không tìm thấy guild_id từ Discord interaction'
+        );
     }
 
     const client = await getDiscordClient();
@@ -54,7 +60,9 @@ async function getDiscordGuild(guildId) {
     const guild = await client.guilds.fetch(guildId);
 
     if (!guild) {
-        throw new Error(`Bot không tìm thấy server ${guildId}`);
+        throw new Error(
+            `Bot không tìm thấy server ${guildId}`
+        );
     }
 
     // Đảm bảo cache channels / roles có dữ liệu
@@ -111,21 +119,163 @@ function getRawBody(req) {
 }
 
 // ============================================================
+// DISCORD INTERACTION WEBHOOK
+// ============================================================
+//
+// Slash command được ACK ngay bằng type: 5 để Discord không
+// timeout trong lúc Vercel cold start / login Discord / query DB.
+//
+// @vercel/functions hỗ trợ giữ execution chạy sau khi response
+// HTTP đã được trả về.
+//
+// Nếu package chưa có, code sẽ fallback sang await trực tiếp.
+//
+
+let vercelWaitUntil = null;
+
+try {
+    vercelWaitUntil = require('@vercel/functions').waitUntil;
+} catch (error) {
+    vercelWaitUntil = null;
+}
+
+async function editOriginalInteraction(
+    interaction,
+    payload
+) {
+    const applicationId =
+        interaction.application_id;
+
+    const interactionToken =
+        interaction.token;
+
+    if (!applicationId || !interactionToken) {
+        throw new Error(
+            'Thiếu application_id hoặc interaction token'
+        );
+    }
+
+    const url =
+        `https://discord.com/api/v10/webhooks/` +
+        `${applicationId}/${interactionToken}/messages/@original`;
+
+    const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorText =
+            await response.text();
+
+        throw new Error(
+            `Discord edit original response failed ` +
+            `(${response.status}): ${errorText}`
+        );
+    }
+}
+
+function normalizeCommandResponse(result) {
+    if (typeof result === 'string') {
+        return {
+            content: result
+        };
+    }
+
+    if (
+        result &&
+        typeof result === 'object'
+    ) {
+        return result;
+    }
+
+    return {
+        content: '✅ Lệnh đã được xử lý.'
+    };
+}
+
+async function processSlashCommand(
+    interaction,
+    command
+) {
+    try {
+        const result =
+            command.executeServerless
+                ? await command.executeServerless(
+                    interaction
+                )
+                : await executeLegacyCommand(
+                    command,
+                    interaction
+                );
+
+        const payload =
+            normalizeCommandResponse(
+                result
+            );
+
+        await editOriginalInteraction(
+            interaction,
+            payload
+        );
+    } catch (error) {
+        console.error(
+            `[COMMAND ERROR] /${interaction.data?.name}:`,
+            error
+        );
+
+        try {
+            await editOriginalInteraction(
+                interaction,
+                {
+                    content:
+                        '❌ Đã xảy ra lỗi khi thực hiện lệnh.\n' +
+                        'Vui lòng thử lại sau.'
+                }
+            );
+        } catch (editError) {
+            console.error(
+                '[COMMAND ERROR] Không thể edit response:',
+                editError
+            );
+        }
+    }
+}
+
+// ============================================================
 // MAIN SERVERLESS HANDLER
 // ============================================================
 
 module.exports = async (req, res) => {
 
     if (req.method !== 'POST') {
-        return res.status(405).send('Method Not Allowed');
+        return res
+            .status(405)
+            .send('Method Not Allowed');
     }
 
-    const signature = req.headers['x-signature-ed25519'];
-    const timestamp = req.headers['x-signature-timestamp'];
-    const clientPublicKey = process.env.DISCORD_PUBLIC_KEY;
+    const signature =
+        req.headers['x-signature-ed25519'];
 
-    if (!signature || !timestamp || !clientPublicKey) {
-        return res.status(401).send('Missing signature or public key');
+    const timestamp =
+        req.headers['x-signature-timestamp'];
+
+    const clientPublicKey =
+        process.env.DISCORD_PUBLIC_KEY;
+
+    if (
+        !signature ||
+        !timestamp ||
+        !clientPublicKey
+    ) {
+        return res
+            .status(401)
+            .send(
+                'Missing signature or public key'
+            );
     }
 
     try {
@@ -134,31 +284,40 @@ module.exports = async (req, res) => {
         // Verify Discord signature
         // --------------------------------------------------------
 
-        const rawBody = await getRawBody(req);
+        const rawBody =
+            await getRawBody(req);
 
-        const isValidRequest = await verifyKey(
-            rawBody,
-            signature,
-            timestamp,
-            clientPublicKey
-        );
+        const isValidRequest =
+            await verifyKey(
+                rawBody,
+                signature,
+                timestamp,
+                clientPublicKey
+            );
 
         if (!isValidRequest) {
-            return res.status(401).send('Bad request signature');
+            return res
+                .status(401)
+                .send(
+                    'Bad request signature'
+                );
         }
 
-        const interaction = JSON.parse(
-            rawBody.toString('utf-8')
-        );
+        const interaction =
+            JSON.parse(
+                rawBody.toString('utf-8')
+            );
 
         // --------------------------------------------------------
         // Discord PING
         // --------------------------------------------------------
 
         if (interaction.type === 1) {
-            return res.status(200).json({
-                type: 1
-            });
+            return res
+                .status(200)
+                .json({
+                    type: 1
+                });
         }
 
         // --------------------------------------------------------
@@ -167,35 +326,71 @@ module.exports = async (req, res) => {
 
         if (interaction.type === 2) {
 
-            const { name } = interaction.data;
+            const { name } =
+                interaction.data;
 
-            const command = commands.get(name);
+            const command =
+                commands.get(name);
 
             if (!command) {
-                return res.status(200).json({
-                    type: 4,
-                    data: {
-                        content:
-                            `⚠️ Lệnh \`/${name}\` chưa được tích hợp.`
-                    }
-                });
+                return res
+                    .status(200)
+                    .json({
+                        type: 4,
+                        data: {
+                            content:
+                                `⚠️ Lệnh \`/${name}\` chưa được tích hợp.`
+                        }
+                    });
             }
 
-            // 1. Phản hồi ngay type: 5 cho Discord để chống timeout 3 giây (tránh bot ngủ đông)
+            // ----------------------------------------------------
+            // ACK NGAY LẬP TỨC
+            // ----------------------------------------------------
+            //
+            // type: 5 =
+            // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+            //
+            // Discord sẽ hiển thị:
+            //
+            // "ToxToxtric đang suy nghĩ..."
+            //
+            // nhưng interaction đã được xác nhận ngay.
+            //
+            // Sau đó command mới được chạy.
+            //
+
             res.status(200).json({
                 type: 5
             });
 
-            // 2. Chạy ngầm lệnh ở background, sau đó dùng Webhook đẩy kết quả về
-            try {
-                if (command.executeServerless) {
-                    await command.executeServerless(interaction);
-                } else {
-                    await executeLegacyCommandAsync(command, interaction);
-                }
-            } catch (err) {
-                console.error(`[BACKGROUND COMMAND ERROR - ${name}]:`, err);
+            const commandPromise =
+                processSlashCommand(
+                    interaction,
+                    command
+                );
+
+            // ----------------------------------------------------
+            // VERCEL WAIT UNTIL
+            // ----------------------------------------------------
+            //
+            // Giữ execution chạy tiếp sau khi HTTP response
+            // đã trả về Discord.
+            //
+
+            if (
+                typeof vercelWaitUntil ===
+                'function'
+            ) {
+                vercelWaitUntil(
+                    commandPromise
+                );
+
+                return;
             }
+
+            // Fallback nếu @vercel/functions chưa tồn tại.
+            await commandPromise;
 
             return;
         }
@@ -237,71 +432,93 @@ module.exports = async (req, res) => {
                     matchRes.rows[0];
 
                 if (!match) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '❌ Không tìm thấy thông tin trận đấu!',
-                            flags: 64
-                        }
-                    });
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '❌ Không tìm thấy thông tin trận đấu!',
+                                flags: 64
+                            }
+                        });
                 }
 
                 if (
                     userId !== match.player1_id &&
                     userId !== match.player2_id
                 ) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '❌ Bạn không phải tuyển thủ trong trận đấu này!',
-                            flags: 64
-                        }
-                    });
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '❌ Bạn không phải tuyển thủ trong trận đấu này!',
+                                flags: 64
+                            }
+                        });
                 }
 
-                if (match.is_proof_submitted !== 1) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '⚠️ Bạn phải dùng lệnh `/gui-anh` để gửi bằng chứng trước khi chọn kết quả!',
-                            flags: 64
-                        }
-                    });
+                if (
+                    match.is_proof_submitted !== 1
+                ) {
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '⚠️ Bạn phải dùng lệnh `/gui-anh` để gửi bằng chứng trước khi chọn kết quả!',
+                                flags: 64
+                            }
+                        });
                 }
 
-                if (match.status === 'completed') {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '✅ Trận đấu này đã kết thúc!',
-                            flags: 64
-                        }
-                    });
+                if (
+                    match.status === 'completed'
+                ) {
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '✅ Trận đấu này đã kết thúc!',
+                                flags: 64
+                            }
+                        });
                 }
 
                 // ----------------------------------------------
                 // GỌI MOD
                 // ----------------------------------------------
 
-                if (customId.startsWith('call_mod_')) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                `⚠️ <@${userId}> đã yêu cầu trợ giúp. Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này!`
-                        }
-                    });
+                if (
+                    customId.startsWith(
+                        'call_mod_'
+                    )
+                ) {
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    `⚠️ <@${userId}> đã yêu cầu trợ giúp. Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này!`
+                            }
+                        });
                 }
 
                 let reportedWinner = null;
                 let scoreP1 = 0;
                 let scoreP2 = 0;
 
-                if (customId.startsWith('win_p1_')) {
+                if (
+                    customId.startsWith(
+                        'win_p1_'
+                    )
+                ) {
 
                     reportedWinner =
                         match.player1_id;
@@ -309,7 +526,11 @@ module.exports = async (req, res) => {
                     scoreP1 = 1;
                     scoreP2 = 0;
 
-                } else if (customId.startsWith('win_p2_')) {
+                } else if (
+                    customId.startsWith(
+                        'win_p2_'
+                    )
+                ) {
 
                     reportedWinner =
                         match.player2_id;
@@ -317,9 +538,14 @@ module.exports = async (req, res) => {
                     scoreP1 = 0;
                     scoreP2 = 1;
 
-                } else if (customId.startsWith('draw_')) {
+                } else if (
+                    customId.startsWith(
+                        'draw_'
+                    )
+                ) {
 
-                    reportedWinner = 'DRAW';
+                    reportedWinner =
+                        'DRAW';
 
                     scoreP1 = 0;
                     scoreP2 = 0;
@@ -355,48 +581,50 @@ module.exports = async (req, res) => {
                         ? 'Hòa'
                         : `<@${reportedWinner}> Thắng`;
 
-                return res.status(200).json({
-                    type: 4,
-                    data: {
+                return res
+                    .status(200)
+                    .json({
+                        type: 4,
+                        data: {
 
-                        embeds: [{
-                            title:
-                                '⏳ CHỜ XÁC NHẬN KẾT QUẢ',
+                            embeds: [{
+                                title:
+                                    '⏳ CHỜ XÁC NHẬN KẾT QUẢ',
 
-                            description:
-                                `<@${userId}> đã báo kết quả: **${resultText}**\n\n` +
-                                `<@${opponentId}> vui lòng bấm **Xác nhận** nếu thông tin chính xác, hoặc **Khiếu nại** nếu có sai sót.`,
+                                description:
+                                    `<@${userId}> đã báo kết quả: **${resultText}**\n\n` +
+                                    `<@${opponentId}> vui lòng bấm **Xác nhận** nếu thông tin chính xác, hoặc **Khiếu nại** nếu có sai sót.`,
 
-                            color: 0xF1C40F
-                        }],
+                                color: 0xF1C40F
+                            }],
 
-                        components: [{
-                            type: 1,
+                            components: [{
+                                type: 1,
 
-                            components: [
+                                components: [
 
-                                {
-                                    type: 2,
-                                    custom_id:
-                                        `confirm_match_${matchId}`,
-                                    label:
-                                        'Xác nhận ✅',
-                                    style: 3
-                                },
+                                    {
+                                        type: 2,
+                                        custom_id:
+                                            `confirm_match_${matchId}`,
+                                        label:
+                                            'Xác nhận ✅',
+                                        style: 3
+                                    },
 
-                                {
-                                    type: 2,
-                                    custom_id:
-                                        `dispute_match_${matchId}`,
-                                    label:
-                                        'Khiếu nại ❌',
-                                    style: 4
-                                }
+                                    {
+                                        type: 2,
+                                        custom_id:
+                                            `dispute_match_${matchId}`,
+                                        label:
+                                            'Khiếu nại ❌',
+                                        style: 4
+                                    }
 
-                            ]
-                        }]
-                    }
-                });
+                                ]
+                            }]
+                        }
+                    });
             }
 
             // ----------------------------------------------------
@@ -422,25 +650,31 @@ module.exports = async (req, res) => {
                     matchRes.rows[0];
 
                 if (!match) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '❌ Trận đấu không tồn tại!',
-                            flags: 64
-                        }
-                    });
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '❌ Trận đấu không tồn tại!',
+                                flags: 64
+                            }
+                        });
                 }
 
-                if (userId === match.reported_by) {
-                    return res.status(200).json({
-                        type: 4,
-                        data: {
-                            content:
-                                '❌ Bạn là người báo kết quả, hãy chờ đối thủ bấm xác nhận!',
-                            flags: 64
-                        }
-                    });
+                if (
+                    userId === match.reported_by
+                ) {
+                    return res
+                        .status(200)
+                        .json({
+                            type: 4,
+                            data: {
+                                content:
+                                    '❌ Bạn là người báo kết quả, hãy chờ đối thủ bấm xác nhận!',
+                                flags: 64
+                            }
+                        });
                 }
 
                 const winnerId =
@@ -537,25 +771,27 @@ module.exports = async (req, res) => {
                         ? '🤝 Hòa'
                         : `🏆 Người thắng: <@${winnerId}>`;
 
-                return res.status(200).json({
-                    type: 7,
-                    data: {
+                return res
+                    .status(200)
+                    .json({
+                        type: 7,
+                        data: {
 
-                        embeds: [{
-                            title:
-                                '🎉 TRẬN ĐẤU HOÀN TẤT',
+                            embeds: [{
+                                title:
+                                    '🎉 TRẬN ĐẤU HOÀN TẤT',
 
-                            description:
-                                `Kết quả đã được xác nhận!\n\n` +
-                                `**${resultDisplay}**\n\n` +
-                                `*Kênh đã hoàn tất.*`,
+                                description:
+                                    `Kết quả đã được xác nhận!\n\n` +
+                                    `**${resultDisplay}**\n\n` +
+                                    `*Kênh đã hoàn tất.*`,
 
-                            color: 0x2ECC71
-                        }],
+                                color: 0x2ECC71
+                            }],
 
-                        components: []
-                    }
-                });
+                            components: []
+                        }
+                    });
             }
 
             // ----------------------------------------------------
@@ -568,23 +804,27 @@ module.exports = async (req, res) => {
                 )
             ) {
 
-                return res.status(200).json({
-                    type: 4,
-                    data: {
-                        content:
-                            '⚠️ **Đã gửi khiếu nại!** Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này.'
-                    }
-                });
+                return res
+                    .status(200)
+                    .json({
+                        type: 4,
+                        data: {
+                            content:
+                                '⚠️ **Đã gửi khiếu nại!** Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này.'
+                        }
+                    });
             }
         }
 
-        return res.status(200).json({
-            type: 4,
-            data: {
-                content:
-                    'Unsupported Interaction'
-            }
-        });
+        return res
+            .status(200)
+            .json({
+                type: 4,
+                data: {
+                    content:
+                        'Unsupported Interaction'
+                }
+            });
 
     } catch (err) {
 
@@ -593,9 +833,11 @@ module.exports = async (req, res) => {
             err
         );
 
-        return res.status(500).send(
-            'Internal Server Error'
-        );
+        return res
+            .status(500)
+            .send(
+                'Internal Server Error'
+            );
     }
 };
 
@@ -603,97 +845,217 @@ module.exports = async (req, res) => {
 // LEGACY COMMAND ADAPTER
 // ============================================================
 
-// ============================================================
-// LEGACY COMMAND ASYNC ADAPTER (Dành cho deferReply / editReply)
-// ============================================================
-
-async function executeLegacyCommandAsync(
+async function executeLegacyCommand(
     command,
     interaction
 ) {
+
+    let responsePayload = null;
+
+    // ----------------------------------------------------------
+    // LẤY GUILD DISCORD.JS THẬT
+    // ----------------------------------------------------------
+
     let guild = null;
 
     if (interaction.guild_id) {
-        try {
-            guild = await getDiscordGuild(interaction.guild_id);
-        } catch (e) {
-            console.error('Không thể fetch guild:', e);
-        }
+        guild =
+            await getDiscordGuild(
+                interaction.guild_id
+            );
     }
 
+    // ----------------------------------------------------------
+    // MOCK INTERACTION
+    // ----------------------------------------------------------
+
     const mockInteraction = {
+
         ...interaction,
-        client: await getDiscordClient(),
+
+        // Discord.js Client thật
+        client:
+            await getDiscordClient(),
+
+        // Discord.js Guild thật
         guild,
-        guildId: interaction.guild_id,
-        channel: guild
-            ? guild.channels.cache.get(interaction.channel_id) || { id: interaction.channel_id }
-            : { id: interaction.channel_id },
-        user: interaction.member?.user || interaction.user,
-        member: interaction.member,
+
+        // Các thông tin tương thích
+        guildId:
+            interaction.guild_id,
+
+        channel:
+            guild
+                ? guild.channels.cache.get(
+                    interaction.channel_id
+                ) || {
+                    id:
+                        interaction.channel_id
+                }
+                : {
+                    id:
+                        interaction.channel_id
+                },
+
+        user:
+            interaction.member?.user ||
+            interaction.user,
+
+        member:
+            interaction.member,
+
         deferred: false,
+
         replied: false,
 
         options: {
+
             getInteger: (name) => {
-                const opt = interaction.data.options?.find(o => o.name === name);
+
+                const opt =
+                    interaction
+                        .data
+                        .options
+                        ?.find(
+                            o =>
+                                o.name === name
+                        );
+
                 return opt?.value;
             },
+
             getString: (name) => {
-                const opt = interaction.data.options?.find(o => o.name === name);
+
+                const opt =
+                    interaction
+                        .data
+                        .options
+                        ?.find(
+                            o =>
+                                o.name === name
+                        );
+
                 return opt?.value;
             },
+
             getUser: (name) => {
-                const opt = interaction.data.options?.find(o => o.name === name);
-                if (!opt) return null;
-                return interaction.data.resolved?.users?.[opt.value] || null;
+
+                const opt =
+                    interaction
+                        .data
+                        .options
+                        ?.find(
+                            o =>
+                                o.name === name
+                        );
+
+                if (!opt) {
+                    return null;
+                }
+
+                return interaction
+                    .data
+                    .resolved
+                    ?.users?.[opt.value] ||
+                    null;
             },
+
             getAttachment: (name) => {
-                const opt = interaction.data.options?.find(o => o.name === name);
-                if (!opt) return null;
-                const attachmentsObj = interaction.data.resolved?.attachments || {};
-                const attachment = attachmentsObj[opt.value] || Object.values(attachmentsObj)[0];
-                if (!attachment) return null;
+
+                const opt =
+                    interaction
+                        .data
+                        .options
+                        ?.find(
+                            o =>
+                                o.name === name
+                        );
+
+                if (!opt) {
+                    return null;
+                }
+
+                const attachmentsObj =
+                    interaction
+                        .data
+                        .resolved
+                        ?.attachments ||
+                    {};
+
+                const attachment =
+                    attachmentsObj[opt.value] ||
+                    Object.values(
+                        attachmentsObj
+                    )[0];
+
+                if (!attachment) {
+                    return null;
+                }
+
                 return {
                     ...attachment,
-                    name: attachment.name || attachment.filename || '',
-                    filename: attachment.filename || attachment.name || ''
+
+                    name:
+                        attachment.name ||
+                        attachment.filename ||
+                        '',
+
+                    filename:
+                        attachment.filename ||
+                        attachment.name ||
+                        ''
                 };
             }
         },
 
+        // ------------------------------------------------------
+        // DISCORD.JS COMPATIBILITY
+        // ------------------------------------------------------
+
         async deferReply() {
+
+            // Interaction đã được ACK bằng
+            // type: 5 ở handler.
+            //
+            // Không gọi Discord lần nữa ở đây.
             this.deferred = true;
         },
 
         async reply(options) {
-            await sendFollowUpOrEdit(interaction.application_id, interaction.token, options);
+
+            responsePayload =
+                options;
+
             this.replied = true;
         },
 
         async editReply(options) {
-            await sendFollowUpOrEdit(interaction.application_id, interaction.token, options);
+
+            responsePayload =
+                options;
+
+            this.replied = true;
+        },
+
+        async followUp(options) {
+
+            // Trong serverless flow hiện tại,
+            // followUp được xem như response cuối.
+            //
+            // Nếu command dùng followUp thay vì reply,
+            // vẫn đảm bảo original response được cập nhật.
+            responsePayload =
+                options;
+
             this.replied = true;
         }
     };
 
-    await command.execute(mockInteraction);
-}
+    await command.execute(
+        mockInteraction
+    );
 
-// Hàm hỗ trợ đẩy kết quả qua Webhook gốc của Discord
-async function sendFollowUpOrEdit(appId, token, options) {
-    const url = `https://discord.com/api/v10/webhooks/${appId}/${token}/messages/@original`;
-    let bodyData = typeof options === 'string' ? { content: options } : options;
-
-    try {
-        await fetch(url, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(bodyData)
-        });
-    } catch (err) {
-        console.error('[WEBHOOK ERROR]:', err);
-    }
+    return responsePayload;
 }
 
 // ============================================================
