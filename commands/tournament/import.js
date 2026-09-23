@@ -9,10 +9,10 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('import_data')
         .setDescription('Import danh sách tuyển thủ & cặp đấu từ file Excel')
-        .addAttachmentOption(option => 
+        .addAttachmentOption(option =>
             option.setName('file')
-                  .setDescription('File Excel (.xlsx) chứa dữ liệu giải đấu')
-                  .setRequired(true)
+                .setDescription('File Excel (.xlsx) chứa dữ liệu giải đấu')
+                .setRequired(true)
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
@@ -21,7 +21,11 @@ module.exports = {
 
         const attachment = interaction.options.getAttachment('file');
 
-        if (!attachment.name.endsWith('.xlsx')) {
+        if (!attachment) {
+            return interaction.editReply('❌ Không tìm thấy file Excel được tải lên!');
+        }
+
+        if (!attachment.name.toLowerCase().endsWith('.xlsx')) {
             return interaction.editReply('❌ Vui lòng tải lên file định dạng Excel (.xlsx)!');
         }
 
@@ -32,7 +36,7 @@ module.exports = {
             const response = await fetch(attachment.url);
             const arrayBuffer = await response.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            
+
             const tempPath = path.join(__dirname, '../../temp_import.xlsx');
             fs.writeFileSync(tempPath, buffer);
 
@@ -60,8 +64,8 @@ module.exports = {
                 for (const row of players) {
                     if (row.discord_id && row.in_game_name) {
                         await client.query(queryPlayer, [
-                            String(row.discord_id), 
-                            String(row.in_game_name), 
+                            String(row.discord_id),
+                            String(row.in_game_name),
                             row.team_sheet_url || null
                         ]);
                         insertedPlayers++;
@@ -79,8 +83,8 @@ module.exports = {
                 for (const row of pairings) {
                     if (row.round_number && row.player1_id && row.player2_id) {
                         await client.query(queryMatch, [
-                            Number(row.round_number), 
-                            String(row.player1_id), 
+                            Number(row.round_number),
+                            String(row.player1_id),
                             String(row.player2_id)
                         ]);
                         insertedMatches++;

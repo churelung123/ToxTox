@@ -230,10 +230,18 @@ async function executeLegacyCommand(command, interaction) {
             getAttachment: (name) => {
                 const opt = interaction.data.options?.find(o => o.name === name);
                 if (!opt) return null;
-                // Discord API trả về resolved.attachments dưới dạng object { [id]: attachment_object }
+
                 const attachmentsObj = interaction.data.resolved?.attachments || {};
-                return attachmentsObj[opt.value] || Object.values(attachmentsObj)[0];
-            }
+                const attachment = attachmentsObj[opt.value] || Object.values(attachmentsObj)[0];
+
+                if (!attachment) return null;
+
+                return {
+                    ...attachment,
+                    name: attachment.name || attachment.filename || '',
+                    filename: attachment.filename || attachment.name || '',
+                };
+            },
         },
         channel: { id: interaction.channel_id },
         user: interaction.member?.user || interaction.user,
