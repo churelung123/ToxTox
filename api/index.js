@@ -6,7 +6,7 @@ const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../util
 // Import tất cả các command
 const commands = new Map();
 const commandFiles = [
-    require('../commands/setKetQua'),
+    require('../commands/tournament/setKetQua'),
     require('../commands/tournament/cleardata'),
     require('../commands/tournament/export'),
     require('../commands/tournament/gui-anh'),
