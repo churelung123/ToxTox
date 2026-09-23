@@ -2,10 +2,9 @@
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { pool, getPlayer } = require('./database');
 
+// Danh sách các Role ID Staff / Trọng tài được phép truy cập
 const ALLOWED_ROLE_IDS = [
-    '1552017048987631687', // Role Ban Tổ Chức
-    '876543210987654321', // Role Trọng Tài
-    '112233445566778899'  // Role Streamer/Caster
+    '1552017048987631687', // Role Staff
 ];
 
 function slugify(str) {
@@ -20,6 +19,51 @@ function slugify(str) {
         .replace(/^-|-$/g, '');
 }
 
+/**
+ * Tạo danh sách Overwrites mặc định cho cả Category và Channel con
+ */
+function buildBasePermissions(guild) {
+    const permissionOverwrites = [
+        {
+            id: guild.roles.everyone.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+        }
+    ];
+
+    // 1. Cấp quyền cho danh sách Role chỉ định (Staff / Trọng tài)
+    for (const roleId of ALLOWED_ROLE_IDS) {
+        if (roleId && guild.roles.cache.has(roleId)) {
+            permissionOverwrites.push({
+                id: roleId,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.AttachFiles,
+                    PermissionFlagsBits.ManageMessages // Giúp Staff xử lý khiếu nại
+                ],
+            });
+        }
+    }
+
+    // 2. Tự động cấp quyền cho tất cả các Role có Administrator trên server
+    guild.roles.cache.forEach(role => {
+        if (role.permissions.has(PermissionFlagsBits.Administrator)) {
+            permissionOverwrites.push({
+                id: role.id,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.ManageMessages
+                ],
+            });
+        }
+    });
+
+    return permissionOverwrites;
+}
+
 async function getOrCreateRoundCategory(guild, roundNumber) {
     const categoryName = `── ROUND ${roundNumber} ──`;
     let category = guild.channels.cache.find(
@@ -30,6 +74,7 @@ async function getOrCreateRoundCategory(guild, roundNumber) {
         category = await guild.channels.create({
             name: categoryName,
             type: ChannelType.GuildCategory,
+            permissionOverwrites: buildBasePermissions(guild) // Phân quyền cho Category ngay từ khi tạo
         });
     }
     return category;
@@ -50,33 +95,12 @@ async function createMatchChannels(guild, matches, roundNumber) {
         
         const channelName = `ban-${match.match_id}-${nameP1}-vs-${nameP2}`;
 
-        const permissionOverwrites = [
-            {
-                id: guild.roles.everyone.id,
-                deny: [PermissionFlagsBits.ViewChannel],
-            }
-        ];
-
-        for (const roleId of ALLOWED_ROLE_IDS) {
-            if (roleId && guild.roles.cache.has(roleId)) {
-                permissionOverwrites.push({
-                    id: roleId,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.AttachFiles
-                    ],
-                });
-            }
-        }
-
         try {
             const channel = await guild.channels.create({
                 name: channelName,
                 type: ChannelType.GuildText,
                 parent: category.id,
-                permissionOverwrites: permissionOverwrites,
+                permissionOverwrites: buildBasePermissions(guild),
             });
 
             let member1 = null;
