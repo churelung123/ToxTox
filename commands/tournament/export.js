@@ -1,0 +1,45 @@
+// File: commands/tournament/export.js
+const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
+const { db } = require('../../utils/database'); // Import file database.js của bạn
+const { exportStandingsToExcel } = require('../../utils/excelHelper');
+
+module.exports = {
+    data: new SlashCommandBuilder()
+        .setName('export_standings')
+        .setDescription('Xuất bảng xếp hạng vòng Thụy Sĩ ra file Excel'),
+        
+    async execute(interaction) {
+        await interaction.deferReply();
+
+        try {
+            // Truy vấn lấy danh sách BXH từ SQLite
+            const players = db.prepare(`
+                SELECT 
+                    in_game_name AS 'Người chơi',
+                    discord_id AS 'Discord ID',
+                    wins AS 'Thắng',
+                    losses AS 'Thua',
+                    draws AS 'Hòa',
+                    (wins * 3 + draws) AS 'Điểm'
+                FROM players 
+                ORDER BY Điểm DESC, wins DESC
+            `).all();
+
+            if (players.length === 0) {
+                return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
+            }
+
+            // Ghi dữ liệu ra file Excel và tạo Attachment gửi lên Discord
+            const fileName = exportStandingsToExcel(players);
+            const file = new AttachmentBuilder(fileName);
+
+            await interaction.editReply({ 
+                content: '📊 Bảng xếp hạng mới nhất của giải đấu:', 
+                files: [file] 
+            });
+        } catch (error) {
+            console.error('[EXPORT ERROR]', error);
+            await interaction.editReply('❌ Có lỗi xảy ra khi xuất file Excel Bảng xếp hạng!');
+        }
+    },
+};
