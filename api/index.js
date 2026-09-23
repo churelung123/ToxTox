@@ -7,10 +7,7 @@ const {
 } = require('discord.js');
 
 const { pool } = require('../utils/database');
-const {
-    exportStandingsToExcel,
-    exportMatchesByRoundToExcel
-} = require('../utils/excelHelper');
+const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
 
 // ============================================================
 // DISCORD CLIENT CHO SERVERLESS

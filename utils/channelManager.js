@@ -9,10 +9,7 @@ const {
     ButtonStyle
 } = require('discord.js');
 
-const {
-    pool,
-    getPlayer
-} = require('./database');
+const { pool, getPlayer } = require('./database');
 
 // ============================================================
 // ROLE STAFF / TRỌNG TÀI
