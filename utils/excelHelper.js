@@ -1,178 +1,126 @@
-const xlsx = require('xlsx');
-const path = require('node:path');
-const { pool } = require('./database');
+// File: commands/tournament/startround.js
 
-const STANDINGS_EXCEL_PATH = path.join(__dirname, '../VGC_Standings.xlsx');
-const MATCHES_EXCEL_PATH = path.join(__dirname, '../VGC_Matches_By_Round.xlsx');
+const {
+    SlashCommandBuilder,
+    PermissionFlagsBits
+} = require('discord.js');
 
-/**
- * Đọc dữ liệu Tuyển thủ & Pairings từ file Excel
- *
- * Hỗ trợ:
- * - Buffer: dùng cho Vercel / Serverless
- * - File path: dùng khi chạy local
- */
-function readTournamentDataFromExcel(input) {
-    try {
-        const workbook = Buffer.isBuffer(input)
-            ? xlsx.read(input, { type: 'buffer' })
-            : xlsx.readFile(input);
+const {
+    pool
+} = require('../../utils/database');
 
-        let players = [];
-
-        if (workbook.SheetNames.includes('Players')) {
-            players = xlsx.utils.sheet_to_json(
-                workbook.Sheets['Players']
-            );
-        } else if (workbook.SheetNames.length > 0) {
-            players = xlsx.utils.sheet_to_json(
-                workbook.Sheets[workbook.SheetNames[0]]
-            );
-        }
-
-        let pairings = [];
-
-        if (workbook.SheetNames.includes('Pairings')) {
-            pairings = xlsx.utils.sheet_to_json(
-                workbook.Sheets['Pairings']
-            );
-        }
-
-        return { players, pairings };
-
-    } catch (error) {
-        console.error(
-            '[EXCEL] Lỗi khi đọc file Excel:',
-            error.message
-        );
-
-        return {
-            players: [],
-            pairings: []
-        };
-    }
-}
-
-/**
- * Xuất Bảng xếp hạng tổng ra file Excel
- */
-async function exportStandingsToExcel(
-    data,
-    fileName = STANDINGS_EXCEL_PATH
-) {
-    const worksheet = xlsx.utils.json_to_sheet(data);
-
-    worksheet['!cols'] = [
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 10 }
-    ];
-
-    const workbook = xlsx.utils.book_new();
-
-    xlsx.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        'Standings'
-    );
-
-    xlsx.writeFile(workbook, fileName);
-
-    return fileName;
-}
-
-/**
- * Xuất Lịch sử Trận đấu chia theo từng Vòng
- * (Mỗi Round 1 Sheet)
- */
-async function exportMatchesByRoundToExcel(
-    fileName = MATCHES_EXCEL_PATH
-) {
-    try {
-        const workbook = xlsx.utils.book_new();
-
-        const roundsRes = await pool.query(`
-            SELECT DISTINCT round_number
-            FROM matches
-            ORDER BY round_number ASC
-        `);
-
-        const rounds = roundsRes.rows;
-
-        if (rounds.length === 0) {
-            return null;
-        }
-
-        for (const r of rounds) {
-            const roundNumber = r.round_number;
-
-            const matchesDataRes = await pool.query(`
-                SELECT 
-                    m.match_id AS "Match ID",
-                    p1.in_game_name AS "Player 1",
-                    p2.in_game_name AS "Player 2",
-                    m.player1_score AS "Tỷ số P1",
-                    m.player2_score AS "Tỷ số P2",
-                    CASE 
-                        WHEN m.winner_id = 'DRAW'
-                            THEN 'Hòa'
-                        WHEN m.winner_id = p1.discord_id
-                            THEN p1.in_game_name
-                        WHEN m.winner_id = p2.discord_id
-                            THEN p2.in_game_name
-                        ELSE 'Chưa hoàn tất'
-                    END AS "Kết Quả",
-                    m.status AS "Trạng Thái",
-                    m.proof_image AS "Link Ảnh Bằng Chứng"
-                FROM matches m
-                LEFT JOIN players p1
-                    ON m.player1_id = p1.discord_id
-                LEFT JOIN players p2
-                    ON m.player2_id = p2.discord_id
-                WHERE m.round_number = $1
-            `, [roundNumber]);
-
-            const worksheet = xlsx.utils.json_to_sheet(
-                matchesDataRes.rows
-            );
-
-            worksheet['!cols'] = [
-                { wch: 12 },
-                { wch: 20 },
-                { wch: 20 },
-                { wch: 10 },
-                { wch: 10 },
-                { wch: 20 },
-                { wch: 15 },
-                { wch: 60 }
-            ];
-
-            xlsx.utils.book_append_sheet(
-                workbook,
-                worksheet,
-                `Round ${roundNumber}`
-            );
-        }
-
-        xlsx.writeFile(workbook, fileName);
-
-        return fileName;
-
-    } catch (error) {
-        console.error(
-            '[EXCEL] Lỗi khi xuất lịch sử theo vòng:',
-            error.message
-        );
-
-        return null;
-    }
-}
+const {
+    createMatchChannels
+} = require('../../utils/channelManager');
 
 module.exports = {
-    readTournamentDataFromExcel,
-    exportStandingsToExcel,
-    exportMatchesByRoundToExcel
+
+    data: new SlashCommandBuilder()
+
+        .setName('startround')
+
+        .setDescription(
+            'Bắt đầu Round đấu: Tự động tạo kênh chat ẩn hàng loạt'
+        )
+
+        .addIntegerOption(opt =>
+            opt
+                .setName('round')
+                .setDescription(
+                    'Số Round đấu (VD: 1, 2, 3)'
+                )
+                .setRequired(true)
+        )
+
+        .setDefaultMemberPermissions(
+            PermissionFlagsBits.Administrator
+        ),
+
+    async execute(interaction) {
+
+        await interaction.deferReply();
+
+        try {
+
+            const roundNumber =
+                interaction.options.getInteger(
+                    'round'
+                );
+
+            // ------------------------------------------------
+            // LẤY CÁC TRẬN PENDING
+            // ------------------------------------------------
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM matches
+                    WHERE round_number = $1
+                    AND status = $2
+                    `,
+                    [
+                        roundNumber,
+                        'pending'
+                    ]
+                );
+
+            const matches =
+                result.rows;
+
+            // ------------------------------------------------
+            // KHÔNG CÓ TRẬN
+            // ------------------------------------------------
+
+            if (
+                !matches ||
+                matches.length === 0
+            ) {
+
+                return await interaction.editReply(
+                    `❌ Không tìm thấy trận đấu nào đang chờ (pending) ở Round ${roundNumber}!`
+                );
+            }
+
+            // ------------------------------------------------
+            // THÔNG BÁO
+            // ------------------------------------------------
+
+            await interaction.editReply(
+                `🚀 Đang khởi tạo ${matches.length} kênh chat ẩn cho Round ${roundNumber}...`
+            );
+
+            // ------------------------------------------------
+            // TẠO CHANNEL
+            //
+            // Trên Vercel, api/index.js sẽ cung cấp
+            // interaction.guild là Guild Discord.js thật.
+            // ------------------------------------------------
+
+            await createMatchChannels(
+                interaction.guild,
+                matches,
+                roundNumber
+            );
+
+            // ------------------------------------------------
+            // HOÀN TẤT
+            // ------------------------------------------------
+
+            await interaction.editReply(
+                `✅ **Hoàn tất!** Đã tạo xong tất cả các bàn thi đấu cho Round ${roundNumber}.`
+            );
+
+        } catch (error) {
+
+            console.error(
+                '[STARTROUND ERROR]:',
+                error
+            );
+
+            await interaction.editReply(
+                `❌ Lỗi khi thực thi lệnh: \`${error.message}\``
+            );
+        }
+    }
 };
