@@ -1,6 +1,6 @@
 // File: commands/setKetQua.js
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const { query } = require('../utils/database');
+const { query } = require('../../utils/channelManager');
 
 module.exports = {
     data: new SlashCommandBuilder()
