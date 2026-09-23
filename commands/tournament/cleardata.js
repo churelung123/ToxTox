@@ -1,6 +1,6 @@
 // File: commands/tournament/cleardata.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { db } = require('../../utils/database');
+const { pool } = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,9 +10,8 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            db.prepare('DELETE FROM matches').run();
-            db.prepare('DELETE FROM players').run();
-            db.prepare("DELETE FROM sqlite_sequence WHERE name = 'matches'").run();
+            // Trong PostgreSQL dùng TRUNCATE để xóa sạch dữ liệu và tự reset ID (RESTART IDENTITY)
+            await pool.query('TRUNCATE TABLE matches, players RESTART IDENTITY');
 
             await interaction.reply({
                 content: '🧹 **Đã xóa toàn bộ dữ liệu trong CSDL!** Bạn có thể tiến hành `/import_data` lại từ đầu.',

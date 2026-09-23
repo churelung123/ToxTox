@@ -1,7 +1,7 @@
 // File: utils/excelHelper.js
 const xlsx = require('xlsx');
 const path = require('node:path');
-const { db } = require('./database');
+const { pool } = require('./database');
 
 const STANDINGS_EXCEL_PATH = path.join(__dirname, '../VGC_Standings.xlsx');
 const MATCHES_EXCEL_PATH = path.join(__dirname, '../VGC_Matches_By_Round.xlsx');
@@ -34,7 +34,7 @@ function readTournamentDataFromExcel(filePath) {
 /**
  * Xuất Bảng xếp hạng tổng ra file Excel
  */
-function exportStandingsToExcel(data, fileName = STANDINGS_EXCEL_PATH) {
+async function exportStandingsToExcel(data, fileName = STANDINGS_EXCEL_PATH) {
     const worksheet = xlsx.utils.json_to_sheet(data);
     
     worksheet['!cols'] = [
@@ -56,40 +56,40 @@ function exportStandingsToExcel(data, fileName = STANDINGS_EXCEL_PATH) {
 /**
  * Xuất Lịch sử Trận đấu chia theo từng Vòng (Mỗi Round 1 Sheet)
  */
-function exportMatchesByRoundToExcel(fileName = MATCHES_EXCEL_PATH) {
+async function exportMatchesByRoundToExcel(fileName = MATCHES_EXCEL_PATH) {
     try {
         const workbook = xlsx.utils.book_new();
 
-        // Đã sửa 'round' thành 'round_number' theo đúng database.js
-        const rounds = db.prepare(`SELECT DISTINCT round_number FROM matches ORDER BY round_number ASC`).all();
+        const roundsRes = await pool.query(`SELECT DISTINCT round_number FROM matches ORDER BY round_number ASC`);
+        const rounds = roundsRes.rows;
 
         if (rounds.length === 0) return null;
 
         for (const r of rounds) {
             const roundNumber = r.round_number;
             
-            const matchesData = db.prepare(`
+            const matchesDataRes = await pool.query(`
                 SELECT 
-                    m.match_id AS 'Match ID',
-                    p1.in_game_name AS 'Player 1',
-                    p2.in_game_name AS 'Player 2',
-                    m.player1_score AS 'Tỷ số P1',
-                    m.player2_score AS 'Tỷ số P2',
+                    m.match_id AS "Match ID",
+                    p1.in_game_name AS "Player 1",
+                    p2.in_game_name AS "Player 2",
+                    m.player1_score AS "Tỷ số P1",
+                    m.player2_score AS "Tỷ số P2",
                     CASE 
                         WHEN m.winner_id = 'DRAW' THEN 'Hòa'
                         WHEN m.winner_id = p1.discord_id THEN p1.in_game_name
                         WHEN m.winner_id = p2.discord_id THEN p2.in_game_name
                         ELSE 'Chưa hoàn tất'
-                    END AS 'Kết Quả',
-                    m.status AS 'Trạng Thái',
-                    m.proof_image AS 'Link Ảnh Bằng Chứng'
+                    END AS "Kết Quả",
+                    m.status AS "Trạng Thái",
+                    m.proof_image AS "Link Ảnh Bằng Chứng"
                 FROM matches m
                 LEFT JOIN players p1 ON m.player1_id = p1.discord_id
                 LEFT JOIN players p2 ON m.player2_id = p2.discord_id
-                WHERE m.round_number = ?
-            `).all(roundNumber);
+                WHERE m.round_number = $1
+            `, [roundNumber]);
 
-            const worksheet = xlsx.utils.json_to_sheet(matchesData);
+            const worksheet = xlsx.utils.json_to_sheet(matchesDataRes.rows);
             worksheet['!cols'] = [
                 { wch: 12 }, { wch: 20 }, { wch: 20 }, 
                 { wch: 10 }, { wch: 10 }, { wch: 20 }, 

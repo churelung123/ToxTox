@@ -1,5 +1,6 @@
+// File: commands/tournament/override.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { db } = require('../../utils/database'); // File database.js của bạn
+const { pool } = require('../../utils/database');
 const { exportStandingsToExcel } = require('../../utils/excelHelper');
 
 module.exports = {
@@ -18,19 +19,25 @@ module.exports = {
         const scoreP1 = interaction.options.getInteger('score_p1');
         const scoreP2 = interaction.options.getInteger('score_p2');
 
-        const match = db.prepare('SELECT * FROM matches WHERE match_id = ?').get(matchId);
+        const matchRes = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
+        const match = matchRes.rows[0];
+
         if (!match) return interaction.reply({ content: '❌ Không tìm thấy Match ID này!', ephemeral: true });
 
         // Cập nhật CSDL
-        db.prepare(`
+        await pool.query(`
             UPDATE matches 
-            SET winner_id = ?, player1_score = ?, player2_score = ?, status = 'completed' 
-            WHERE match_id = ?
-        `).run(winner.id, scoreP1, scoreP2, matchId);
+            SET winner_id = $1, player1_score = $2, player2_score = $3, status = 'completed' 
+            WHERE match_id = $4
+        `, [winner.id, scoreP1, scoreP2, matchId]);
 
         // Xuất lại BXH Excel
-        const allPlayers = db.prepare('SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC').all();
-        exportStandingsToExcel(allPlayers);
+        const allPlayersRes = await pool.query(
+            'SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC'
+        );
+        if (typeof exportStandingsToExcel === 'function') {
+            await exportStandingsToExcel(allPlayersRes.rows);
+        }
 
         await interaction.reply(`✅ Trọng tài đã cập nhật kết quả Bàn ${matchId}: <@${winner.id}> thắng với tỷ số ${scoreP1} - ${scoreP2}.`);
     }

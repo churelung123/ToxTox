@@ -1,6 +1,6 @@
 // File: commands/tournament/startround.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { db } = require('../../utils/database'); // Đã destructure đúng { db }
+const { pool } = require('../../utils/database');
 const { createMatchChannels } = require('../../utils/channelManager');
 
 module.exports = {
@@ -20,8 +20,12 @@ module.exports = {
         try {
             const roundNumber = interaction.options.getInteger('round');
 
-            // ĐÃ SỬA: Dùng binding parameter ? cho cả round_number và status
-            const matches = db.prepare('SELECT * FROM matches WHERE round_number = ? AND status = ?').all(roundNumber, 'pending');
+            // Chuyển SQLite sang PostgreSQL Query ($1, $2)
+            const result = await pool.query(
+                'SELECT * FROM matches WHERE round_number = $1 AND status = $2', 
+                [roundNumber, 'pending']
+            );
+            const matches = result.rows;
 
             if (!matches || matches.length === 0) {
                 return await interaction.editReply(`❌ Không tìm thấy trận đấu nào đang chờ (pending) ở Round ${roundNumber}!`);

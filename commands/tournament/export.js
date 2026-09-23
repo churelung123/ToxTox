@@ -1,6 +1,6 @@
 // File: commands/tournament/export.js
 const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
-const { db } = require('../../utils/database'); // Import file database.js của bạn
+const { pool } = require('../../utils/database');
 const { exportStandingsToExcel } = require('../../utils/excelHelper');
 
 module.exports = {
@@ -12,25 +12,27 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            // Truy vấn lấy danh sách BXH từ SQLite
-            const players = db.prepare(`
+            // Truy vấn lấy danh sách BXH từ PostgreSQL
+            const res = await pool.query(`
                 SELECT 
-                    in_game_name AS 'Người chơi',
-                    discord_id AS 'Discord ID',
-                    wins AS 'Thắng',
-                    losses AS 'Thua',
-                    draws AS 'Hòa',
-                    (wins * 3 + draws) AS 'Điểm'
+                    in_game_name AS "Người chơi",
+                    discord_id AS "Discord ID",
+                    wins AS "Thắng",
+                    losses AS "Thua",
+                    draws AS "Hòa",
+                    (wins * 3 + draws) AS "Điểm"
                 FROM players 
-                ORDER BY Điểm DESC, wins DESC
-            `).all();
+                ORDER BY "Điểm" DESC, wins DESC
+            `);
+
+            const players = res.rows;
 
             if (players.length === 0) {
                 return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
             }
 
-            // Ghi dữ liệu ra file Excel và tạo Attachment gửi lên Discord
-            const fileName = exportStandingsToExcel(players);
+            // Ghi dữ liệu ra file Excel
+            const fileName = await exportStandingsToExcel(players);
             const file = new AttachmentBuilder(fileName);
 
             await interaction.editReply({ 

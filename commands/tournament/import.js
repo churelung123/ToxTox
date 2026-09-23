@@ -1,6 +1,6 @@
 // File: commands/tournament/import.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { db } = require('../../utils/database'); // File database.js của bạn
+const { pool } = require('../../utils/database');
 const { readTournamentDataFromExcel } = require('../../utils/excelHelper');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,6 +25,8 @@ module.exports = {
             return interaction.editReply('❌ Vui lòng tải lên file định dạng Excel (.xlsx)!');
         }
 
+        const client = await pool.connect(); // Dùng client riêng để làm Transaction
+
         try {
             // Tải file tạm về máy
             const response = await fetch(attachment.url);
@@ -43,44 +45,50 @@ module.exports = {
             let insertedPlayers = 0;
             let insertedMatches = 0;
 
-            // 1. Insert Players vào DB
-            if (players.length > 0) {
-                const insertPlayerStmt = db.prepare(`
+            await client.query('BEGIN'); // Bắt đầu Transaction
+
+            // 1. Insert Players vào PostgreSQL
+            if (players && players.length > 0) {
+                const queryPlayer = `
                     INSERT INTO players (discord_id, in_game_name, team_sheet_url)
-                    VALUES (?, ?, ?)
+                    VALUES ($1, $2, $3)
                     ON CONFLICT(discord_id) DO UPDATE SET
-                        in_game_name = excluded.in_game_name,
-                        team_sheet_url = COALESCE(excluded.team_sheet_url, players.team_sheet_url)
-                `);
+                        in_game_name = EXCLUDED.in_game_name,
+                        team_sheet_url = COALESCE(EXCLUDED.team_sheet_url, players.team_sheet_url)
+                `;
 
-                const playerTx = db.transaction((rows) => {
-                    for (const row of rows) {
-                        if (row.discord_id && row.in_game_name) {
-                            insertPlayerStmt.run(String(row.discord_id), String(row.in_game_name), row.team_sheet_url || null);
-                            insertedPlayers++;
-                        }
+                for (const row of players) {
+                    if (row.discord_id && row.in_game_name) {
+                        await client.query(queryPlayer, [
+                            String(row.discord_id), 
+                            String(row.in_game_name), 
+                            row.team_sheet_url || null
+                        ]);
+                        insertedPlayers++;
                     }
-                });
-                playerTx(players);
+                }
             }
 
-            // 2. Insert Pairings (Matches) vào DB (nếu có)
-            if (pairings.length > 0) {
-                const insertMatchStmt = db.prepare(`
+            // 2. Insert Pairings (Matches) vào PostgreSQL
+            if (pairings && pairings.length > 0) {
+                const queryMatch = `
                     INSERT INTO matches (round_number, player1_id, player2_id, status)
-                    VALUES (?, ?, ?, 'pending')
-                `);
+                    VALUES ($1, $2, $3, 'pending')
+                `;
 
-                const matchTx = db.transaction((rows) => {
-                    for (const row of rows) {
-                        if (row.round_number && row.player1_id && row.player2_id) {
-                            insertMatchStmt.run(Number(row.round_number), String(row.player1_id), String(row.player2_id));
-                            insertedMatches++;
-                        }
+                for (const row of pairings) {
+                    if (row.round_number && row.player1_id && row.player2_id) {
+                        await client.query(queryMatch, [
+                            Number(row.round_number), 
+                            String(row.player1_id), 
+                            String(row.player2_id)
+                        ]);
+                        insertedMatches++;
                     }
-                });
-                matchTx(pairings);
+                }
             }
+
+            await client.query('COMMIT'); // Lưu thay đổi
 
             await interaction.editReply(
                 `✅ **Nạp dữ liệu thành công!**\n` +
@@ -89,8 +97,11 @@ module.exports = {
             );
 
         } catch (error) {
+            await client.query('ROLLBACK'); // Hoàn tác nếu có lỗi
             console.error('[IMPORT ERROR]', error);
             await interaction.editReply('❌ Đã xảy ra lỗi trong quá trình xử lý file Excel!');
+        } finally {
+            client.release();
         }
     }
 };

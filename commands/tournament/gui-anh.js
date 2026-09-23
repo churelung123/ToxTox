@@ -1,6 +1,6 @@
 // File: commands/tournament/gui-anh.js
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db } = require('../../utils/database');
+const { pool, getPlayer } = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,7 +14,9 @@ module.exports = {
 
     async execute(interaction) {
         const channelId = interaction.channel.id;
-        const match = db.prepare('SELECT * FROM matches WHERE channel_id = ?').get(channelId);
+        
+        const matchRes = await pool.query('SELECT * FROM matches WHERE channel_id = $1', [channelId]);
+        const match = matchRes.rows[0];
 
         if (!match) {
             return interaction.reply({ content: '❌ Kênh này không phải là kênh trận đấu hợp lệ!', ephemeral: true });
@@ -31,15 +33,17 @@ module.exports = {
         const image = interaction.options.getAttachment('image');
 
         if (!image.contentType || !image.contentType.startsWith('image/')) {
-            return interaction.reply({ content: '❌ File tải lên phải là hình ảnh (PNG, JPG, WEBPM...)!', ephemeral: true });
+            return interaction.reply({ content: '❌ File tải lên phải là hình ảnh (PNG, JPG, WEBP...)!', ephemeral: true });
         }
 
-        // Cập nhật DB
-        db.prepare('UPDATE matches SET proof_image = ?, is_proof_submitted = 1 WHERE match_id = ?')
-          .run(image.url, match.match_id);
+        // Cập nhật DB trong PostgreSQL
+        await pool.query(
+            'UPDATE matches SET proof_image = $1, is_proof_submitted = 1 WHERE match_id = $2',
+            [image.url, match.match_id]
+        );
 
-        const p1 = db.prepare('SELECT * FROM players WHERE discord_id = ?').get(match.player1_id);
-        const p2 = db.prepare('SELECT * FROM players WHERE discord_id = ?').get(match.player2_id);
+        const p1 = await getPlayer(match.player1_id);
+        const p2 = await getPlayer(match.player2_id);
 
         const proofEmbed = new EmbedBuilder()
             .setTitle('📸 BẰNG CHỨNG KẾT QUẢ TRẬN ĐẤU')

@@ -1,101 +1,128 @@
 // File: utils/database.js
-const Database = require('better-sqlite3');
-const path = require('node:path');
+require('dotenv').config();
+const { Pool } = require('pg');
 
-const dbPath = path.join(__dirname, '../vgc_tournament.db');
-const db = new Database(dbPath);
+const connectionString = process.env.DATABASE_URL;
 
-function initDatabase() {
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS players (
-            discord_id TEXT PRIMARY KEY,
-            in_game_name TEXT NOT NULL,
-            team_sheet_url TEXT,
-            wins INTEGER DEFAULT 0,
-            losses INTEGER DEFAULT 0,
-            draws INTEGER DEFAULT 0,
-            is_dropped INTEGER DEFAULT 0
-        )
-    `);
+if (!connectionString) {
+    console.error('❌ Thiếu biến môi trường DATABASE_URL trong file .env!');
+}
 
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS matches (
-            match_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            round_number INTEGER NOT NULL,
-            player1_id TEXT NOT NULL,
-            player2_id TEXT NOT NULL,
-            channel_id TEXT,
-            winner_id TEXT,
-            player1_score INTEGER DEFAULT 0,
-            player2_score INTEGER DEFAULT 0,
-            reported_by TEXT,
-            proof_image TEXT,
-            is_proof_submitted INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'pending'
-        )
-    `);
+const pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false } // Bắt buộc khi kết nối Neon Cloud
+});
 
-    const addColumnIfNotExist = (tableName, columnName, columnDefinition) => {
-        const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
-        const hasColumn = columns.some(col => col.name === columnName);
-        if (!hasColumn) {
-            db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
-            console.log(`[DATABASE MIGRATION] Đã bổ sung cột '${columnName}' vào bảng '${tableName}'.`);
-        }
-    };
+/**
+ * Khởi tạo cấu trúc Bảng trên PostgreSQL (Neon)
+ */
+async function initDatabase() {
+    try {
+        const client = await pool.connect();
 
-    addColumnIfNotExist('matches', 'channel_id', 'TEXT');
-    addColumnIfNotExist('matches', 'winner_id', 'TEXT');
-    addColumnIfNotExist('matches', 'player1_score', 'INTEGER DEFAULT 0');
-    addColumnIfNotExist('matches', 'player2_score', 'INTEGER DEFAULT 0');
-    addColumnIfNotExist('matches', 'reported_by', 'TEXT');
-    addColumnIfNotExist('matches', 'proof_image', 'TEXT');
-    addColumnIfNotExist('matches', 'is_proof_submitted', 'INTEGER DEFAULT 0');
-    addColumnIfNotExist('matches', 'status', "TEXT DEFAULT 'pending'");
+        // 1. Tạo bảng players
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS players (
+                discord_id VARCHAR(50) PRIMARY KEY,
+                in_game_name VARCHAR(100) NOT NULL,
+                team_sheet_url TEXT,
+                wins INT DEFAULT 0,
+                losses INT DEFAULT 0,
+                draws INT DEFAULT 0,
+                is_dropped INT DEFAULT 0
+            );
+        `);
 
-    console.log('[DATABASE] Cơ sở dữ liệu đã được khởi tạo và đồng bộ thành công!');
+        // 2. Tạo bảng matches
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS matches (
+                match_id SERIAL PRIMARY KEY,
+                round_number INT NOT NULL,
+                player1_id VARCHAR(50) NOT NULL,
+                player2_id VARCHAR(50) NOT NULL,
+                channel_id VARCHAR(50),
+                winner_id VARCHAR(50),
+                player1_score INT DEFAULT 0,
+                player2_score INT DEFAULT 0,
+                reported_by VARCHAR(50),
+                proof_image TEXT,
+                is_proof_submitted INT DEFAULT 0,
+                status VARCHAR(20) DEFAULT 'pending'
+            );
+        `);
+
+        client.release();
+        console.log('[DATABASE] Cơ sở dữ liệu PostgreSQL (Neon) đã kết nối và khởi tạo thành công!');
+    } catch (err) {
+        console.error('[DATABASE ERROR] Lỗi khởi tạo cơ sở dữ liệu:', err.message);
+    }
 }
 
 initDatabase();
 
-function upsertPlayer(discordId, inGameName, teamSheetUrl = null) {
-    const stmt = db.prepare(`
+/**
+ * Thêm mới hoặc Cập nhật thông tin tuyển thủ
+ */
+async function upsertPlayer(discordId, inGameName, teamSheetUrl = null) {
+    const queryText = `
         INSERT INTO players (discord_id, in_game_name, team_sheet_url)
-        VALUES (?, ?, ?)
+        VALUES ($1, $2, $3)
         ON CONFLICT(discord_id) DO UPDATE SET
-            in_game_name = excluded.in_game_name,
-            team_sheet_url = COALESCE(excluded.team_sheet_url, players.team_sheet_url)
-    `);
-    return stmt.run(discordId, inGameName, teamSheetUrl);
+            in_game_name = EXCLUDED.in_game_name,
+            team_sheet_url = COALESCE(EXCLUDED.team_sheet_url, players.team_sheet_url)
+    `;
+    return await pool.query(queryText, [discordId, inGameName, teamSheetUrl]);
 }
 
-function getPlayer(discordId) {
-    return db.prepare(`SELECT * FROM players WHERE discord_id = ?`).get(discordId);
+/**
+ * Lấy thông tin tuyển thủ theo ID Discord
+ */
+async function getPlayer(discordId) {
+    const res = await pool.query(`SELECT * FROM players WHERE discord_id = $1`, [discordId]);
+    return res.rows[0] || null;
 }
 
-function createMatch(roundNumber, player1Id, player2Id) {
-    const stmt = db.prepare(`
+/**
+ * Tạo trận đấu mới và trả về match_id vừa tạo
+ */
+async function createMatch(roundNumber, player1Id, player2Id) {
+    const queryText = `
         INSERT INTO matches (round_number, player1_id, player2_id, status)
-        VALUES (?, ?, ?, 'pending')
-    `);
-    const info = stmt.run(roundNumber, player1Id, player2Id);
-    return info.lastInsertRowid;
+        VALUES ($1, $2, $3, 'pending')
+        RETURNING match_id
+    `;
+    const res = await pool.query(queryText, [roundNumber, player1Id, player2Id]);
+    return res.rows[0].match_id;
 }
 
-function updateMatchChannel(matchId, channelId) {
-    const stmt = db.prepare(`UPDATE matches SET channel_id = ? WHERE match_id = ?`);
-    return stmt.run(channelId, matchId);
+/**
+ * Cập nhật channel_id cho trận đấu
+ */
+async function updateMatchChannel(matchId, channelId) {
+    return await pool.query(
+        `UPDATE matches SET channel_id = $1 WHERE match_id = $2`,
+        [channelId, matchId]
+    );
 }
 
-function getMatchByChannel(channelId) {
-    return db.prepare(`SELECT * FROM matches WHERE channel_id = ? AND status != 'completed'`).get(channelId);
+/**
+ * Lấy thông tin trận đấu theo Channel ID
+ */
+async function getMatchByChannel(channelId) {
+    const res = await pool.query(
+        `SELECT * FROM matches WHERE channel_id = $1 AND status != 'completed'`,
+        [channelId]
+    );
+    return res.rows[0] || null;
 }
 
 module.exports = {
-    db,
+    pool,
+    query: (text, params) => pool.query(text, params),
     upsertPlayer,
     getPlayer,
     createMatch,
     updateMatchChannel,
+    initDatabase,
     getMatchByChannel
 };

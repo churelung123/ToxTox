@@ -1,6 +1,6 @@
 // File: events/interactionCreate.js
 const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const { db } = require('../utils/database');
+const { pool } = require('../utils/database');
 const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
 
 module.exports = {
@@ -33,7 +33,8 @@ module.exports = {
             // --- BÁO KẾT QUẢ BẰNG NÚT (P1 thắng / P2 thắng / Hòa / Gọi Mod) ---
             if (customId.startsWith('win_p1_') || customId.startsWith('win_p2_') || customId.startsWith('draw_') || customId.startsWith('call_mod_')) {
                 const matchId = customId.split('_').pop();
-                const match = db.prepare('SELECT * FROM matches WHERE match_id = ?').get(matchId);
+                const matchRes = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
+                const match = matchRes.rows[0];
 
                 if (!match) {
                     return interaction.reply({ content: '❌ Không tìm thấy thông tin trận đấu!', ephemeral: true });
@@ -79,11 +80,11 @@ module.exports = {
                 }
 
                 // Lưu kết quả tạm thời vào DB và chờ đối thủ xác nhận
-                db.prepare(`
+                await pool.query(`
                     UPDATE matches 
-                    SET player1_score = ?, player2_score = ?, reported_by = ?, winner_id = ?, status = 'waiting_confirm' 
-                    WHERE match_id = ?
-                `).run(scoreP1, scoreP2, interaction.user.id, reportedWinner, matchId);
+                    SET player1_score = $1, player2_score = $2, reported_by = $3, winner_id = $4, status = 'waiting_confirm' 
+                    WHERE match_id = $5
+                `, [scoreP1, scoreP2, interaction.user.id, reportedWinner, matchId]);
 
                 const opponentId = (interaction.user.id === match.player1_id) ? match.player2_id : match.player1_id;
                 const resultText = reportedWinner === 'DRAW' ? 'Hòa' : `<@${reportedWinner}> Thắng`;
@@ -107,7 +108,8 @@ module.exports = {
             // --- ĐỐI THỦ BẤM "XÁC NHẬN ✅" ---
             else if (customId.startsWith('confirm_match_')) {
                 const matchId = customId.split('_')[2];
-                const match = db.prepare('SELECT * FROM matches WHERE match_id = ?').get(matchId);
+                const matchRes = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
+                const match = matchRes.rows[0];
 
                 if (!match) return interaction.reply({ content: '❌ Trận đấu không tồn tại!', ephemeral: true });
 
@@ -122,16 +124,16 @@ module.exports = {
                 const winnerId = match.winner_id;
 
                 // Cập nhật trạng thái completed
-                db.prepare(`UPDATE matches SET status = 'completed' WHERE match_id = ?`).run(matchId);
+                await pool.query(`UPDATE matches SET status = 'completed' WHERE match_id = $1`, [matchId]);
 
                 // Cập nhật điểm cho Players
                 if (winnerId === 'DRAW') {
-                    db.prepare('UPDATE players SET draws = draws + 1 WHERE discord_id = ?').run(match.player1_id);
-                    db.prepare('UPDATE players SET draws = draws + 1 WHERE discord_id = ?').run(match.player2_id);
+                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player1_id]);
+                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player2_id]);
                 } else if (winnerId) {
                     const loserId = (winnerId === match.player1_id) ? match.player2_id : match.player1_id;
-                    db.prepare('UPDATE players SET wins = wins + 1 WHERE discord_id = ?').run(winnerId);
-                    db.prepare('UPDATE players SET losses = losses + 1 WHERE discord_id = ?').run(loserId);
+                    await pool.query('UPDATE players SET wins = wins + 1 WHERE discord_id = $1', [winnerId]);
+                    await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [loserId]);
                 }
 
                 // Khóa quyền gửi tin nhắn của 2 tuyển thủ trong kênh
@@ -139,12 +141,15 @@ module.exports = {
                 await interaction.channel.permissionOverwrites.edit(match.player2_id, { SendMessages: false }).catch(() => null);
 
                 // Xuất lại 2 file Excel (Standings & Lịch sử đối đầu theo vòng)
-                const allPlayers = db.prepare('SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC').all();
+                const allPlayersRes = await pool.query(
+                    'SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC'
+                );
+                
                 if (typeof exportStandingsToExcel === 'function') {
-                    exportStandingsToExcel(allPlayers);
+                    await exportStandingsToExcel(allPlayersRes.rows);
                 }
                 if (typeof exportMatchesByRoundToExcel === 'function') {
-                    exportMatchesByRoundToExcel();
+                    await exportMatchesByRoundToExcel();
                 }
 
                 const resultDisplay = winnerId === 'DRAW' ? '🤝 Hòa' : `🏆 Người thắng: <@${winnerId}>`;

@@ -1,12 +1,11 @@
 // File: utils/channelManager.js
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { db } = require('./database');
+const { pool, getPlayer } = require('./database');
 
-// 🆔 ĐIỀN DẠNG ROLE ID BẠN MUỐN PHÂN QUYỀN VÀO ĐÂY
 const ALLOWED_ROLE_IDS = [
-    '1552017048987631687', // Ví dụ: ID Role Ban Tổ Chức (Có quyền Chat, Quản lý)
-    '876543210987654321', // Ví dụ: ID Role Trọng Tài (Có quyền Chat)
-    '112233445566778899'  // Ví dụ: ID Role Streamer/Caster (Chỉ Xem)
+    '1552017048987631687', // Role Ban Tổ Chức
+    '876543210987654321', // Role Trọng Tài
+    '112233445566778899'  // Role Streamer/Caster
 ];
 
 function slugify(str) {
@@ -43,24 +42,21 @@ async function createMatchChannels(guild, matches, roundNumber) {
         const p1Id = match.player1_id ? String(match.player1_id).trim() : null;
         const p2Id = match.player2_id ? String(match.player2_id).trim() : null;
 
-        const p1 = db.prepare('SELECT * FROM players WHERE discord_id = ?').get(p1Id);
-        const p2 = db.prepare('SELECT * FROM players WHERE discord_id = ?').get(p2Id);
+        const p1 = p1Id ? await getPlayer(p1Id) : null;
+        const p2 = p2Id ? await getPlayer(p2Id) : null;
 
         const nameP1 = slugify(p1 ? p1.in_game_name : 'Player1');
         const nameP2 = slugify(p2 ? p2.in_game_name : 'Player2');
         
         const channelName = `ban-${match.match_id}-${nameP1}-vs-${nameP2}`;
 
-        // Tạo mảng permissionOverwrites ban đầu
         const permissionOverwrites = [
-            // 1. Ẩn kênh với tất cả mọi người
             {
                 id: guild.roles.everyone.id,
                 deny: [PermissionFlagsBits.ViewChannel],
             }
         ];
 
-        // 2. Cấp quyền xem/chat cho các Role trong ALLOWED_ROLE_IDS
         for (const roleId of ALLOWED_ROLE_IDS) {
             if (roleId && guild.roles.cache.has(roleId)) {
                 permissionOverwrites.push({
@@ -76,7 +72,6 @@ async function createMatchChannels(guild, matches, roundNumber) {
         }
 
         try {
-            // Tạo kênh văn bản thi đấu với mảng quyền đã bổ sung
             const channel = await guild.channels.create({
                 name: channelName,
                 type: ChannelType.GuildText,
@@ -84,7 +79,6 @@ async function createMatchChannels(guild, matches, roundNumber) {
                 permissionOverwrites: permissionOverwrites,
             });
 
-            // 3. Phân quyền riêng cho từng tuyển thủ thi đấu
             let member1 = null;
             let member2 = null;
 
@@ -112,13 +106,12 @@ async function createMatchChannels(guild, matches, roundNumber) {
                 }
             }
 
-            // Lưu channel_id vào CSDL
-            db.prepare('UPDATE matches SET channel_id = ? WHERE match_id = ?').run(channel.id, match.match_id);
+            // Lưu channel_id vào CSDL PostgreSQL
+            await pool.query('UPDATE matches SET channel_id = $1 WHERE match_id = $2', [channel.id, match.match_id]);
 
             const p1Mention = member1 ? `<@${member1.id}>` : (p1Id ? `<@${p1Id}>` : 'Player 1');
             const p2Mention = member2 ? `<@${member2.id}>` : (p2Id ? `<@${p2Id}>` : 'Player 2');
 
-            // Embed thông báo
             const embedMatch = new EmbedBuilder()
                 .setTitle(`⚔️ Trận xếp hạng đã bắt đầu`)
                 .setDescription(
@@ -128,7 +121,6 @@ async function createMatchChannels(guild, matches, roundNumber) {
                 )
                 .setColor(0xE67E22);
 
-            // Nút bấm kết quả
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`win_p1_${match.match_id}`)
@@ -158,7 +150,6 @@ async function createMatchChannels(guild, matches, roundNumber) {
                 components: [row]
             });
 
-            // Gửi Team Sheet
             if (p1 && p1.team_sheet_url) {
                 const embedSheet1 = new EmbedBuilder()
                     .setTitle(`📋 Team Sheet: ${p1.in_game_name}`)

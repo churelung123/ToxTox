@@ -1,23 +1,24 @@
 // File: utils/swissPairing.js
-const { db, createMatch } = require('./database');
+const { pool, createMatch } = require('./database');
 
 /**
  * Thuật toán ghép cặp hệ Thụy Sĩ (Swiss System)
  */
-function generateNextRoundPairings(nextRound) {
+async function generateNextRoundPairings(nextRound) {
     // 1. Lấy danh sách tuyển thủ còn thi đấu (chưa dropped)
-    const players = db.prepare(`
+    const playersRes = await pool.query(`
         SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points 
         FROM players 
         WHERE is_dropped = 0 OR is_dropped IS NULL
         ORDER BY points DESC, wins DESC, RANDOM()
-    `).all();
+    `);
+    const players = playersRes.rows;
 
     // 2. Thu thập lịch sử các cặp trận đã từng gặp nhau
-    const pastMatches = db.prepare(`SELECT player1_id, player2_id FROM matches`).all();
+    const pastMatchesRes = await pool.query(`SELECT player1_id, player2_id FROM matches`);
     const playedPairs = new Set();
     
-    for (const match of pastMatches) {
+    for (const match of pastMatchesRes.rows) {
         playedPairs.add(`${match.player1_id}_${match.player2_id}`);
         playedPairs.add(`${match.player2_id}_${match.player1_id}`);
     }
@@ -47,8 +48,8 @@ function generateNextRoundPairings(nextRound) {
 
         const p2 = unassigned.splice(opponentIndex, 1)[0];
 
-        // Tạo trận đấu mới trong DB bằng hàm createMatch sẵn có trong database.js
-        const matchId = createMatch(nextRound, p1.discord_id, p2.discord_id);
+        // Tạo trận đấu mới trong DB bằng hàm createMatch bất đồng bộ
+        const matchId = await createMatch(nextRound, p1.discord_id, p2.discord_id);
 
         pairings.push({
             match_id: matchId,
@@ -61,7 +62,7 @@ function generateNextRoundPairings(nextRound) {
     // Nếu tổng số người chơi là số lẻ (Nhận 1 Bye)
     if (unassigned.length === 1) {
         const byePlayer = unassigned[0];
-        db.prepare(`UPDATE players SET wins = wins + 1 WHERE discord_id = ?`).run(byePlayer.discord_id);
+        await pool.query(`UPDATE players SET wins = wins + 1 WHERE discord_id = $1`, [byePlayer.discord_id]);
         console.log(`[SWISS] Player <@${byePlayer.discord_id}> được miễn đấu Round ${nextRound} (+1 Win).`);
     }
 
