@@ -67,11 +67,11 @@ function buildBasePermissions(guild) {
 
     for (const roleId of ALLOWED_ROLE_IDS) {
         if (roleId) {
-            // Kiểm tra xem role có trong cache không, nếu có truyền nguyên object role, nếu không truyền string ID
+            // Lấy từ cache, nếu không có thì truyền trực tiếp string ID nhưng đảm bảo bot đã fetch roles trước đó
             const roleObj = guild.roles.cache.get(roleId);
             
             permissionOverwrites.push({
-                id: roleObj || roleId, // Truyền trực tiếp role object nếu có để tránh lỗi cache
+                id: roleObj ? roleObj.id : roleId,
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -95,7 +95,7 @@ function buildBasePermissions(guild) {
                 )
             ) {
                 permissionOverwrites.push({
-                    id: role, // Truyền thẳng đối tượng role
+                    id: role.id,
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
