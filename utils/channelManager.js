@@ -46,6 +46,20 @@ function slugify(str) {
 
 function buildBasePermissions(guild) {
 
+    console.log('[PERMISSION DEBUG] Guild:', {
+        guildId: guild.id,
+        guildName: guild.name
+    });
+
+    console.log(
+        '[PERMISSION DEBUG] ALLOWED_ROLE_IDS:',
+        ALLOWED_ROLE_IDS.map(roleId => ({
+            roleId,
+            exists: guild.roles.cache.has(roleId),
+            roleName: guild.roles.cache.get(roleId)?.name || 'NOT FOUND'
+        }))
+    );
+
     if (!guild) {
         throw new Error(
             'buildBasePermissions: guild không tồn tại'
@@ -75,25 +89,29 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
+        const role = guild.roles.cache.get(roleId);
 
-        if (
-            roleId &&
-            guild.roles.cache.has(roleId)
-        ) {
-
-            permissionOverwrites.push({
-
-                id: roleId,
-
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory,
-                    PermissionFlagsBits.AttachFiles,
-                    PermissionFlagsBits.ManageMessages
-                ]
-            });
+        if (!role) {
+            console.error(
+                `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+            );
+            continue;
         }
+
+        console.log(
+            `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
+        );
+
+        permissionOverwrites.push({
+            id: role.id,
+            allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.ManageMessages
+            ]
+        });
     }
 
     // --------------------------------------------------------
@@ -584,7 +602,7 @@ async function deleteAllMatchChannels(guild) {
                     isInRoundCategory
                 ) &&
                 channel.type !==
-                    ChannelType.GuildCategory
+                ChannelType.GuildCategory
             ) {
 
                 await channel
