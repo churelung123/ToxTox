@@ -7,78 +7,41 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('export_standings')
         .setDescription('Xuất bảng xếp hạng vòng Thụy Sĩ ra file Excel'),
-
+        
     async execute(interaction) {
         await interaction.deferReply();
 
         try {
-            console.log('[EXPORT] Bắt đầu export bảng xếp hạng...');
-
+            // Truy vấn lấy danh sách BXH từ PostgreSQL
             const res = await pool.query(`
-            SELECT 
-                in_game_name AS "Người chơi",
-                discord_id AS "Discord ID",
-                wins AS "Thắng",
-                losses AS "Thua",
-                draws AS "Hòa",
-                (wins * 3 + draws) AS "Điểm"
-            FROM players 
-            ORDER BY "Điểm" DESC, wins DESC
-        `);
+                SELECT 
+                    in_game_name AS "Người chơi",
+                    discord_id AS "Discord ID",
+                    wins AS "Thắng",
+                    losses AS "Thua",
+                    draws AS "Hòa",
+                    (wins * 3 + draws) AS "Điểm"
+                FROM players 
+                ORDER BY "Điểm" DESC, wins DESC
+            `);
 
             const players = res.rows;
 
-            console.log(
-                '[EXPORT] Số lượng người chơi:',
-                players.length
-            );
-
             if (players.length === 0) {
-                return interaction.editReply(
-                    '❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!'
-                );
+                return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
             }
 
-            const buffer = await exportStandingsToExcel(players);
+            // Ghi dữ liệu ra file Excel
+            const fileName = await exportStandingsToExcel(players);
+            const file = new AttachmentBuilder(fileName);
 
-            if (!buffer) {
-                return interaction.editReply(
-                    '❌ Không thể tạo file Excel bảng xếp hạng!'
-                );
-            }
-
-            console.log(
-                '[EXPORT] Buffer Excel:',
-                buffer.length,
-                'bytes'
-            );
-
-            const file = new AttachmentBuilder(buffer, {
-                name: 'bang-xep-hang.xlsx'
+            await interaction.editReply({ 
+                content: '📊 Bảng xếp hạng mới nhất của giải đấu:', 
+                files: [file] 
             });
-
-            console.log('[EXPORT] Đang gửi file lên Discord...');
-
-            await interaction.editReply({
-                content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
-                files: [file]
-            });
-
-            console.log('[EXPORT] File Excel đã được gửi!');
-
         } catch (error) {
             console.error('[EXPORT ERROR]', error);
-
-            try {
-                await interaction.editReply(
-                    `❌ Có lỗi khi xuất file Excel: ${error.message}`
-                );
-            } catch (replyError) {
-                console.error(
-                    '[EXPORT] Không thể gửi thông báo lỗi:',
-                    replyError
-                );
-            }
+            await interaction.editReply('❌ Có lỗi xảy ra khi xuất file Excel Bảng xếp hạng!');
         }
     },
 };
