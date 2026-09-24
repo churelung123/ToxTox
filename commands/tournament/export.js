@@ -60,9 +60,21 @@ module.exports = {
 
             console.log('[EXPORT] Sending Discord attachment...');
 
-            await interaction.editReply({
+            const sentMessage = await interaction.editReply({
                 content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
                 files: [file]
+            });
+
+            console.log('[EXPORT] DISCORD RESPONSE:', {
+                id: sentMessage.id,
+                attachments: sentMessage.attachments?.size,
+                attachmentData: sentMessage.attachments?.map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    size: a.size,
+                    url: a.url,
+                    contentType: a.contentType
+                }))
             });
 
             console.log('[EXPORT] SUCCESS');
