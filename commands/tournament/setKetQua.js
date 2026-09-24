@@ -1,12 +1,12 @@
 // File: commands/setKetQua.js
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const { query } = require('../../utils/channelManager');
+const { pool } = require('../../utils/database');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('set-ket-qua')
         .setDescription('⚙️ [ADMIN] Can thiệp và điều chỉnh kết quả trận đấu khi có khiếu nại')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents) // Chỉ người có quyền ManageEvents/Admin mới dùng được
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
         .addIntegerOption(option =>
             option.setName('match_id')
                 .setDescription('ID của trận đấu cần chỉnh sửa')
@@ -30,7 +30,7 @@ module.exports = {
 
         try {
             // 1. Kiểm tra trận đấu có tồn tại không
-            const matchResult = await query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
+            const matchResult = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
             if (matchResult.rows.length === 0) {
                 return interaction.editReply(`❌ Không tìm thấy trận đấu có Match ID: \`${matchId}\`.`);
             }
@@ -56,8 +56,8 @@ module.exports = {
                 summaryText = `🔄 Trận đấu đã được HỦY KẾT QUẢ và đưa về trạng thái chờ thi đấu.`;
             }
 
-            // 3. Cập nhật CSDL Neon
-            await query(
+            // 3. Cập nhật CSDL Neon qua pool.query
+            await pool.query(
                 'UPDATE matches SET status = $1, winner_id = $2 WHERE match_id = $3',
                 [status, winnerId, matchId]
             );
