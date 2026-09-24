@@ -75,21 +75,12 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-        const role = guild.roles.cache.get(roleId);
-
-        if (!role) {
-            console.error(
-                `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
-            );
-            continue;
-        }
-
-        console.log(
-            `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
-        );
+        // Thay vì bắt buộc phải tìm trong cache ra object role, 
+        // Discord.js cho phép truyền thẳng id vào object permissionOverwrites
+        console.log(`[PERMISSION] Cấp quyền trực tiếp cho Role ID: ${roleId}`);
 
         permissionOverwrites.push({
-            id: role.id,
+            id: roleId,
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -287,7 +278,8 @@ async function createMatchChannels(
                     ReadMessageHistory: true,
                     AttachFiles: true,
                     ManageMessages: true
-                }).catch(err => console.error(`[STAFF PERMISSION ERROR] Không thể cấp quyền cho role ${roleId}:`, err));
+                }, { type: 1 }) // type: 1 nghĩa là Role (0 là Member)
+                    .catch(err => console.error(`[STAFF PERMISSION ERROR] Không thể cấp quyền cho role ${roleId}:`, err));
             }
 
             let member1 = null;
