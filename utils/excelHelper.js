@@ -54,9 +54,14 @@ function readTournamentDataFromExcel(input) {
 }
 
 /**
- * Xuất Bảng xếp hạng tổng ra Excel (Dạng Buffer cho Vercel)
+ * Xuất Bảng xếp hạng tổng ra Excel
+ *
+ * Lưu ý:
+ * Hàm này vẫn dùng filesystem.
+ * Không nên gọi trên Vercel Serverless nếu fileName
+ * trỏ vào thư mục của project.
  */
-async function exportStandingsToExcel(data) {
+async function exportStandingsToExcel(data, fileName) {
     try {
         const worksheet = xlsx.utils.json_to_sheet(data);
 
@@ -77,9 +82,9 @@ async function exportStandingsToExcel(data) {
             'Standings'
         );
 
-        // Xuất ra buffer thay vì dùng writeFile ghi xuống ổ đĩa
-        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-        return buffer;
+        xlsx.writeFile(workbook, fileName);
+
+        return fileName;
     } catch (error) {
         console.error(
             '[EXCEL] Lỗi khi xuất bảng xếp hạng:',
@@ -91,9 +96,9 @@ async function exportStandingsToExcel(data) {
 }
 
 /**
- * Xuất lịch sử trận đấu theo từng Round (Dạng Buffer cho Vercel)
+ * Xuất lịch sử trận đấu theo từng Round
  */
-async function exportMatchesByRoundToExcel() {
+async function exportMatchesByRoundToExcel(fileName) {
     try {
         const workbook = xlsx.utils.book_new();
 
@@ -168,9 +173,9 @@ async function exportMatchesByRoundToExcel() {
             );
         }
 
-        // Xuất ra buffer
-        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-        return buffer;
+        xlsx.writeFile(workbook, fileName);
+
+        return fileName;
 
     } catch (error) {
         console.error(
