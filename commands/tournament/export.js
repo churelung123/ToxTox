@@ -31,8 +31,14 @@ module.exports = {
                 return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
             }
 
-            // Ghi dữ liệu ra file Excel
-            const fileName = await exportStandingsToExcel(players);
+            // Ghi dữ liệu ra file Excel với tên file cụ thể
+            const outputFileName = 'standings.xlsx';
+            const fileName = await exportStandingsToExcel(players, outputFileName);
+            
+            if (!fileName) {
+                return interaction.editReply('❌ Không thể tạo file Excel bảng xếp hạng.');
+            }
+
             const file = new AttachmentBuilder(fileName);
 
             await interaction.editReply({ 
