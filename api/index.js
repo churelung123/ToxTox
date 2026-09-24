@@ -44,6 +44,20 @@ async function getDiscordClient() {
     }
 
     await discordLoginPromise;
+    console.log('========== DISCORD BOT IDENTITY ==========');
+    console.log('[BOT]', {
+        userId: discordClient.user?.id || null,
+        username: discordClient.user?.username || null,
+        tag: discordClient.user?.tag || null
+    });
+
+    console.log('[EXPECTED CLIENT ID]', {
+        clientId: process.env.CLIENT_ID,
+        matches:
+            discordClient.user?.id === process.env.CLIENT_ID
+    });
+
+    console.log('==========================================');
 
     return discordClient;
 }
