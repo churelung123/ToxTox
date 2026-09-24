@@ -81,7 +81,7 @@ async function getDiscordGuild(guildId) {
 
     // Đảm bảo cache channels / roles có dữ liệu
     await guild.channels.fetch();
-    await guild.roles.fetch({ force: true });
+    await guild.roles.fetch();
 
     console.log('========== DISCORD GUILD ROLE DEBUG ==========');
 
