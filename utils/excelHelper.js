@@ -61,7 +61,7 @@ function readTournamentDataFromExcel(input) {
  * Không nên gọi trên Vercel Serverless nếu fileName
  * trỏ vào thư mục của project.
  */
-async function exportStandingsToExcel(data, fileName) {
+async function exportStandingsToExcel(data, fileName = 'standings.xlsx') {
     try {
         const worksheet = xlsx.utils.json_to_sheet(data);
 
@@ -98,7 +98,7 @@ async function exportStandingsToExcel(data, fileName) {
 /**
  * Xuất lịch sử trận đấu theo từng Round
  */
-async function exportMatchesByRoundToExcel(fileName) {
+async function exportMatchesByRoundToExcel(fileName = 'matches_by_round.xlsx') {
     try {
         const workbook = xlsx.utils.book_new();
 

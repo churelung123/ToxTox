@@ -65,7 +65,7 @@ module.exports = {
             // 4. Thông báo kết quả điều chỉnh
             const embed = new EmbedBuilder()
                 .setTitle(`⚖️ Quyết định của Trọng Tài / Ban Tổ Chức`)
-                .setDescription(`Đã cập nhật lại kết quả cho **Match ID: ${matchId}**\n\n**Kết quả mới:** ${summaryText}\n**Người can thiệp:** ${interaction.user}`)
+                .setDescription(`Đã cập nhật lại kết quả cho **Match ID: ${matchId}**\n\n**Kết quả mới:** ${summaryText}\n**Người can thiệp:** <@${interaction.user.id}>`)
                 .setColor(0xF1C40F)
                 .setTimestamp();
 
