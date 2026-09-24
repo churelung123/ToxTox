@@ -59,24 +59,12 @@ module.exports = {
 
             console.log('[EXPORT] Đang gửi file lên Discord...');
 
-            await interaction.editReply(
-                '📊 Đang gửi bảng xếp hạng...'
-            );
-
-            const message = await interaction.followUp({
+            await interaction.editReply({
                 content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
                 files: [file]
             });
 
-            console.log('[EXPORT] Follow-up attachments:',
-                message.attachments.map(a => ({
-                    name: a.name,
-                    url: a.url,
-                    size: a.size
-                }))
-            );
-
-            console.log('[EXPORT] Gửi file thành công!');
+            console.log('[EXPORT] File Excel đã được gửi!');
 
         } catch (error) {
             console.error('[EXPORT ERROR]', error);

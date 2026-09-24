@@ -63,9 +63,6 @@ function readTournamentDataFromExcel(input) {
  */
 async function exportStandingsToExcel(data) {
     try {
-        console.log('[EXCEL] Bắt đầu tạo bảng xếp hạng...');
-        console.log('[EXCEL] Số lượng tuyển thủ:', data.length);
-
         const worksheet = xlsx.utils.json_to_sheet(data);
 
         worksheet['!cols'] = [
