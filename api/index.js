@@ -69,6 +69,40 @@ async function getDiscordGuild(guildId) {
     await guild.channels.fetch();
     await guild.roles.fetch();
 
+    console.log('========== DISCORD GUILD ROLE DEBUG ==========');
+
+    console.log('[GUILD]', {
+        guildId: guild.id,
+        guildName: guild.name
+    });
+
+    console.log('[TARGET ROLE]', {
+        roleId: '1552017048987631687',
+        existsInCache: guild.roles.cache.has('1552017048987631687'),
+        roleName: guild.roles.cache.get('1552017048987631687')?.name || null
+    });
+
+    try {
+        const targetRole = await guild.roles.fetch('1552017048987631687');
+
+        console.log('[TARGET ROLE FETCH]', {
+            success: !!targetRole,
+            roleId: targetRole?.id || null,
+            roleName: targetRole?.name || null,
+            roleGuildId: targetRole?.guild?.id || null
+        });
+    } catch (error) {
+        console.error('[TARGET ROLE FETCH ERROR]', {
+            roleId: '1552017048987631687',
+            guildId: guild.id,
+            error: error.message,
+            code: error.code,
+            status: error.status
+        });
+    }
+
+    console.log('==============================================');
+
     return guild;
 }
 
