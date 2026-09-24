@@ -2,6 +2,8 @@
 
 const xlsx = require('xlsx');
 const { pool } = require('./database');
+const path = require('path');
+const os = require('os');
 
 /**
  * Đọc dữ liệu Tuyển thủ & Pairings từ file Excel
@@ -61,7 +63,7 @@ function readTournamentDataFromExcel(input) {
  * Không nên gọi trên Vercel Serverless nếu fileName
  * trỏ vào thư mục của project.
  */
-async function exportStandingsToExcel(data) {
+async function exportStandingsToExcel(data, fileName = 'standings.xlsx') {
     try {
         const worksheet = xlsx.utils.json_to_sheet(data);
 
@@ -81,15 +83,12 @@ async function exportStandingsToExcel(data) {
             'Standings'
         );
 
-        // Xuất ra dạng buffer
-        const excelBuffer = xlsx.write(workbook, { 
-            type: 'buffer', 
-            bookType: 'xlsx' 
-        });
+        // Lưu vào thư mục tạm của hệ thống (tránh lỗi read-only file system)
+        const filePath = path.join(os.tmpdir(), fileName);
+        xlsx.writeFile(workbook, filePath);
 
-        return excelBuffer;
+        return filePath;
     } catch (error) {
-        // In toàn bộ stack trace lỗi để debug chính xác
         console.error('[EXCEL] Lỗi chi tiết khi xuất bảng xếp hạng:', error);
         return null;
     }

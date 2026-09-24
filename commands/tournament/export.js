@@ -30,15 +30,15 @@ module.exports = {
                 return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
             }
 
-            // Nhận về buffer thay vì tên file
-            const excelBuffer = await exportStandingsToExcel(players);
+            // Gọi hàm xuất file (trả về đường dẫn tuyệt đối tới file tạm)
+            const filePath = await exportStandingsToExcel(players, 'standings.xlsx');
             
-            if (!excelBuffer) {
+            if (!filePath) {
                 return interaction.editReply('❌ Không thể tạo file Excel bảng xếp hạng.');
             }
 
-            // Truyền buffer và chỉ định tên file hiển thị trên Discord
-            const file = new AttachmentBuilder(excelBuffer, { name: 'standings.xlsx' });
+            // Đính kèm file thông qua đường dẫn
+            const file = new AttachmentBuilder(filePath);
 
             await interaction.editReply({ 
                 content: '📊 Bảng xếp hạng mới nhất của giải đấu:', 
