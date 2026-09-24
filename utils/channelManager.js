@@ -44,7 +44,7 @@ function slugify(str) {
 // PERMISSION
 // ============================================================
 
-function buildBasePermissions(guild) {
+async function buildBasePermissions(guild) {
 
     if (!guild) {
         throw new Error(
@@ -73,14 +73,23 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
     // STAFF / TRỌNG TÀI
     // --------------------------------------------------------
-
+    await guild.roles.fetch();
     for (const roleId of ALLOWED_ROLE_IDS) {
-        // Thay vì bắt buộc phải tìm trong cache ra object role, 
-        // Discord.js cho phép truyền thẳng id vào object permissionOverwrites
-        console.log(`[PERMISSION] Cấp quyền trực tiếp cho Role ID: ${roleId}`);
+        const role = guild.roles.cache.get(roleId);
+
+        if (!role) {
+            console.error(
+                `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+            );
+            continue;
+        }
+
+        console.log(
+            `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
+        );
 
         permissionOverwrites.push({
-            id: roleId,
+            id: role.id,
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -169,7 +178,7 @@ async function getOrCreateRoundCategory(
                 type: ChannelType.GuildCategory,
 
                 permissionOverwrites:
-                    buildBasePermissions(guild)
+                    await buildBasePermissions(guild)
             });
     }
 
@@ -264,23 +273,12 @@ async function createMatchChannels(
                     parent: category.id,
 
                     permissionOverwrites:
-                        buildBasePermissions(guild)
+                        await buildBasePermissions(guild)
                 });
 
             // ------------------------------------------------
             // FETCH MEMBERS
             // ------------------------------------------------
-
-            for (const roleId of ALLOWED_ROLE_IDS) {
-                await channel.permissionOverwrites.edit(roleId, {
-                    ViewChannel: true,
-                    SendMessages: true,
-                    ReadMessageHistory: true,
-                    AttachFiles: true,
-                    ManageMessages: true
-                }, { type: 1 }) // type: 1 nghĩa là Role (0 là Member)
-                    .catch(err => console.error(`[STAFF PERMISSION ERROR] Không thể cấp quyền cho role ${roleId}:`, err));
-            }
 
             let member1 = null;
             let member2 = null;
