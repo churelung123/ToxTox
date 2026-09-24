@@ -159,12 +159,107 @@ async function editOriginalInteraction(
         `https://discord.com/api/v10/webhooks/` +
         `${applicationId}/${interactionToken}/messages/@original`;
 
+    // ----------------------------------------------------------
+    // KHÔNG CÓ FILE
+    // ----------------------------------------------------------
+
+    if (!payload.files || payload.files.length === 0) {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorText =
+                await response.text();
+
+            throw new Error(
+                `Discord edit original response failed ` +
+                `(${response.status}): ${errorText}`
+            );
+        }
+
+        return;
+    }
+
+    // ----------------------------------------------------------
+    // CÓ FILE → MULTIPART/FORM-DATA
+    // ----------------------------------------------------------
+
+    const formData = new FormData();
+
+    const attachments = [];
+
+    payload.files.forEach((file, index) => {
+
+        // AttachmentBuilder của discord.js v14
+        const buffer = file.attachment;
+
+        const filename =
+            file.name ||
+            `file-${index}`;
+
+        if (!buffer) {
+            throw new Error(
+                `Attachment ${index} không có dữ liệu`
+            );
+        }
+
+        if (!Buffer.isBuffer(buffer)) {
+            throw new Error(
+                `Attachment ${index} không phải Buffer`
+            );
+        }
+
+        attachments.push({
+            id: String(index),
+            filename
+        });
+
+        const blob = new Blob(
+            [buffer],
+            {
+                type:
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }
+        );
+
+        formData.append(
+            `files[${index}]`,
+            blob,
+            filename
+        );
+    });
+
+    // Payload mà Discord API cần
+    const payloadJson = {
+        ...payload
+    };
+
+    delete payloadJson.files;
+
+    payloadJson.attachments =
+        attachments;
+
+    formData.append(
+        'payload_json',
+        JSON.stringify(payloadJson)
+    );
+
+    console.log(
+        '[DISCORD] Sending multipart attachment:',
+        {
+            files: attachments,
+            content: payload.content
+        }
+    );
+
     const response = await fetch(url, {
         method: 'PATCH',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        body: formData
     });
 
     if (!response.ok) {
@@ -176,6 +271,10 @@ async function editOriginalInteraction(
             `(${response.status}): ${errorText}`
         );
     }
+
+    console.log(
+        '[DISCORD] Attachment uploaded successfully'
+    );
 }
 
 function normalizeCommandResponse(result) {
