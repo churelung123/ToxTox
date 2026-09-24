@@ -59,32 +59,22 @@ function buildBasePermissions(guild) {
     }
 
     const permissionOverwrites = [
-
         {
             id: guild.roles.everyone.id,
-
             deny: [
                 PermissionFlagsBits.ViewChannel
             ]
         }
-
     ];
 
     // --------------------------------------------------------
-    // STAFF / TRỌNG TÀI
+    // STAFF / TRỌNG TÀI (Chỉ thêm nếu role thực sự có trong cache của Guild)
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-
-        if (
-            roleId &&
-            guild.roles.cache.has(roleId)
-        ) {
-
+        if (roleId && guild.roles.cache.has(roleId)) {
             permissionOverwrites.push({
-
                 id: roleId,
-
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -101,17 +91,15 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     guild.roles.cache.forEach(role => {
-
         if (
+            role &&
+            role.id &&
             role.permissions?.has(
                 PermissionFlagsBits.Administrator
             )
         ) {
-
             permissionOverwrites.push({
-
                 id: role.id,
-
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
