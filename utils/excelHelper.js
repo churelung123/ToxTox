@@ -81,7 +81,7 @@ async function exportStandingsToExcel(data) {
             'Standings'
         );
 
-        // Xuất ra dạng buffer thay vì ghi file xuống ổ đĩa
+        // Xuất ra dạng buffer
         const excelBuffer = xlsx.write(workbook, { 
             type: 'buffer', 
             bookType: 'xlsx' 
@@ -89,10 +89,8 @@ async function exportStandingsToExcel(data) {
 
         return excelBuffer;
     } catch (error) {
-        console.error(
-            '[EXCEL] Lỗi khi xuất bảng xếp hạng:',
-            error.message
-        );
+        // In toàn bộ stack trace lỗi để debug chính xác
+        console.error('[EXCEL] Lỗi chi tiết khi xuất bảng xếp hạng:', error);
         return null;
     }
 }
