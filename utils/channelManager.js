@@ -52,22 +52,13 @@ function buildBasePermissions(guild) {
         );
     }
 
-    if (!guild.roles?.cache) {
-        throw new Error(
-            'buildBasePermissions: guild.roles.cache không tồn tại'
-        );
-    }
-
     const permissionOverwrites = [
-
         {
             id: guild.roles.everyone.id,
-
             deny: [
                 PermissionFlagsBits.ViewChannel
             ]
         }
-
     ];
 
     // --------------------------------------------------------
@@ -75,11 +66,8 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-        console.log(`[PERM DEBUG] Checking roleId: ${roleId}`);
-        console.log(`[PERM DEBUG] cache.has? ${guild.roles.cache.has(roleId)}`);
-        console.log(`[PERM DEBUG] role object:`, guild.roles.cache.get(roleId)?.name);
-
-        if (roleId && guild.roles.cache.has(roleId)) {
+        if (roleId) {
+            console.log(`[PERM DEBUG] Ép cấp quyền trực tiếp cho Role ID: ${roleId}`);
             permissionOverwrites.push({
                 id: roleId,
                 allow: [
@@ -90,9 +78,6 @@ function buildBasePermissions(guild) {
                     PermissionFlagsBits.ManageMessages
                 ]
             });
-            console.log(`[PERM DEBUG] ✅ Added overwrite for role ${roleId}`);
-        } else {
-            console.warn(`[PERM DEBUG] ❌ Role ${roleId} NOT found in cache → bỏ qua`);
         }
     }
 
@@ -100,27 +85,25 @@ function buildBasePermissions(guild) {
     // ADMIN
     // --------------------------------------------------------
 
-    guild.roles.cache.forEach(role => {
-
-        if (
-            role.permissions?.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-
-            permissionOverwrites.push({
-
-                id: role.id,
-
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory,
-                    PermissionFlagsBits.ManageMessages
-                ]
-            });
-        }
-    });
+    if (guild.roles?.cache) {
+        guild.roles.cache.forEach(role => {
+            if (
+                role.permissions?.has(
+                    PermissionFlagsBits.Administrator
+                )
+            ) {
+                permissionOverwrites.push({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageMessages
+                    ]
+                });
+            }
+        });
+    }
 
     return permissionOverwrites;
 }
