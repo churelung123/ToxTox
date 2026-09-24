@@ -94,14 +94,36 @@ async function buildBasePermissions(guild) {
             continue;
         }
 
-        const role = await guild.roles.fetch(roleId).catch(error => {
-            console.error(
-                `[PERMISSION ERROR] Không thể fetch role ${roleId}:`,
-                error.message
-            );
+        console.log(
+            `[PERMISSION FETCH] Đang fetch role ${roleId}...`
+        );
 
-            return null;
-        });
+        const role = await guild.roles.fetch(roleId)
+            .then(role => {
+                console.log(
+                    `[PERMISSION FETCH SUCCESS]`,
+                    {
+                        roleId: role.id,
+                        roleName: role.name,
+                        guildId: role.guild.id
+                    }
+                );
+
+                return role;
+            })
+            .catch(error => {
+                console.error(
+                    `[PERMISSION FETCH FAILED]`,
+                    {
+                        roleId,
+                        guildId: guild.id,
+                        error: error.message,
+                        code: error.code
+                    }
+                );
+
+                return null;
+            });
 
         if (!role) {
             console.error(
