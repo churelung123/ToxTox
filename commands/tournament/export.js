@@ -12,7 +12,6 @@ module.exports = {
         await interaction.deferReply();
 
         try {
-            // Truy vấn lấy danh sách BXH từ PostgreSQL
             const res = await pool.query(`
                 SELECT 
                     in_game_name AS "Người chơi",
@@ -31,15 +30,15 @@ module.exports = {
                 return interaction.editReply('❌ Hiện chưa có dữ liệu tuyển thủ trong hệ thống!');
             }
 
-            // Ghi dữ liệu ra file Excel với tên file cụ thể
-            const outputFileName = 'standings.xlsx';
-            const fileName = await exportStandingsToExcel(players, outputFileName);
+            // Nhận về buffer thay vì tên file
+            const excelBuffer = await exportStandingsToExcel(players);
             
-            if (!fileName) {
+            if (!excelBuffer) {
                 return interaction.editReply('❌ Không thể tạo file Excel bảng xếp hạng.');
             }
 
-            const file = new AttachmentBuilder(fileName);
+            // Truyền buffer và chỉ định tên file hiển thị trên Discord
+            const file = new AttachmentBuilder(excelBuffer, { name: 'standings.xlsx' });
 
             await interaction.editReply({ 
                 content: '📊 Bảng xếp hạng mới nhất của giải đấu:', 
