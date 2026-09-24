@@ -45,32 +45,31 @@ function slugify(str) {
 // ============================================================
 
 async function buildBasePermissions(guild) {
-    if (!guild) {
-        throw new Error('buildBasePermissions: guild không tồn tại');
-    }
+    await guild.roles.fetch({ force: true });
 
     const permissionOverwrites = [
         {
-            // @everyone
             id: guild.roles.everyone.id,
-            deny: [
-                PermissionFlagsBits.ViewChannel
-            ]
+            deny: [PermissionFlagsBits.ViewChannel]
         }
     ];
 
-    // STAFF / TRỌNG TÀI
-    // Không fetch role nữa.
-    // Discord permissionOverwrites chấp nhận trực tiếp Role ID.
     for (const roleId of ALLOWED_ROLE_IDS) {
-        if (!roleId) continue;
+        const role = guild.roles.cache.get(roleId);
 
-        console.log(
-            `[PERMISSION] Thêm trực tiếp role ${roleId} vào permission overwrite`
-        );
+        if (!role) {
+            throw new Error(
+                `[PERMISSION ERROR] Không tìm thấy role ${roleId} trong guild ${guild.id}`
+            );
+        }
+
+        console.log('[PERMISSION] Role found:', {
+            roleId: role.id,
+            roleName: role.name
+        });
 
         permissionOverwrites.push({
-            id: roleId,
+            id: role,
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -81,15 +80,10 @@ async function buildBasePermissions(guild) {
         });
     }
 
-    // ADMIN
     guild.roles.cache.forEach(role => {
-        if (
-            role.permissions?.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
+        if (role.permissions?.has(PermissionFlagsBits.Administrator)) {
             permissionOverwrites.push({
-                id: role.id,
+                id: role,
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
