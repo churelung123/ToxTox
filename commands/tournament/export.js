@@ -7,7 +7,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('export_standings')
         .setDescription('Xuất bảng xếp hạng vòng Thụy Sĩ ra file Excel'),
-        
+
     async execute(interaction) {
         await interaction.deferReply();
 
@@ -32,12 +32,26 @@ module.exports = {
             }
 
             // Ghi dữ liệu ra file Excel
-            const fileName = await exportStandingsToExcel(players);
-            const file = new AttachmentBuilder(fileName);
+            const buffer = await exportStandingsToExcel(players);
 
-            await interaction.editReply({ 
-                content: '📊 Bảng xếp hạng mới nhất của giải đấu:', 
-                files: [file] 
+            if (!buffer) {
+                return interaction.editReply(
+                    '❌ Không thể tạo file Excel!'
+                );
+            }
+
+            const file = new AttachmentBuilder(buffer, {
+                name: 'standings.xlsx'
+            });
+
+            await interaction.editReply({
+                content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
+                files: [file]
+            });
+
+            await interaction.editReply({
+                content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
+                files: [file]
             });
         } catch (error) {
             console.error('[EXPORT ERROR]', error);
