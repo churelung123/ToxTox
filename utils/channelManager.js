@@ -52,13 +52,22 @@ function buildBasePermissions(guild) {
         );
     }
 
+    if (!guild.roles?.cache) {
+        throw new Error(
+            'buildBasePermissions: guild.roles.cache không tồn tại'
+        );
+    }
+
     const permissionOverwrites = [
+
         {
             id: guild.roles.everyone.id,
+
             deny: [
                 PermissionFlagsBits.ViewChannel
             ]
         }
+
     ];
 
     // --------------------------------------------------------
@@ -66,12 +75,16 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-        if (roleId) {
-            // Lấy từ cache, nếu không có thì truyền trực tiếp string ID nhưng đảm bảo bot đã fetch roles trước đó
-            const roleObj = guild.roles.cache.get(roleId);
-            
+
+        if (
+            roleId &&
+            guild.roles.cache.has(roleId)
+        ) {
+
             permissionOverwrites.push({
-                id: roleObj ? roleObj.id : roleId,
+
+                id: roleId,
+
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -87,25 +100,27 @@ function buildBasePermissions(guild) {
     // ADMIN
     // --------------------------------------------------------
 
-    if (guild.roles?.cache) {
-        guild.roles.cache.forEach(role => {
-            if (
-                role.permissions?.has(
-                    PermissionFlagsBits.Administrator
-                )
-            ) {
-                permissionOverwrites.push({
-                    id: role.id,
-                    allow: [
-                        PermissionFlagsBits.ViewChannel,
-                        PermissionFlagsBits.SendMessages,
-                        PermissionFlagsBits.ReadMessageHistory,
-                        PermissionFlagsBits.ManageMessages
-                    ]
-                });
-            }
-        });
-    }
+    guild.roles.cache.forEach(role => {
+
+        if (
+            role.permissions?.has(
+                PermissionFlagsBits.Administrator
+            )
+        ) {
+
+            permissionOverwrites.push({
+
+                id: role.id,
+
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                    PermissionFlagsBits.ManageMessages
+                ]
+            });
+        }
+    });
 
     return permissionOverwrites;
 }
