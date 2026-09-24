@@ -61,7 +61,7 @@ function readTournamentDataFromExcel(input) {
  * Không nên gọi trên Vercel Serverless nếu fileName
  * trỏ vào thư mục của project.
  */
-async function exportStandingsToExcel(data, fileName) {
+async function exportStandingsToExcel(data) {
     try {
         const worksheet = xlsx.utils.json_to_sheet(data);
 
@@ -82,13 +82,18 @@ async function exportStandingsToExcel(data, fileName) {
             'Standings'
         );
 
-        xlsx.writeFile(workbook, fileName);
+        // Tạo file Excel trong bộ nhớ
+        const buffer = xlsx.write(workbook, {
+            type: 'buffer',
+            bookType: 'xlsx'
+        });
 
-        return fileName;
+        return buffer;
+
     } catch (error) {
         console.error(
             '[EXCEL] Lỗi khi xuất bảng xếp hạng:',
-            error.message
+            error
         );
 
         return null;
