@@ -67,9 +67,11 @@ function buildBasePermissions(guild) {
 
     for (const roleId of ALLOWED_ROLE_IDS) {
         if (roleId) {
-            console.log(`[PERM DEBUG] Ép cấp quyền trực tiếp cho Role ID: ${roleId}`);
+            // Kiểm tra xem role có trong cache không, nếu có truyền nguyên object role, nếu không truyền string ID
+            const roleObj = guild.roles.cache.get(roleId);
+            
             permissionOverwrites.push({
-                id: roleId,
+                id: roleObj || roleId, // Truyền trực tiếp role object nếu có để tránh lỗi cache
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -93,7 +95,7 @@ function buildBasePermissions(guild) {
                 )
             ) {
                 permissionOverwrites.push({
-                    id: role.id,
+                    id: role, // Truyền thẳng đối tượng role
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
