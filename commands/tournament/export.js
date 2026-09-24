@@ -59,10 +59,22 @@ module.exports = {
 
             console.log('[EXPORT] Đang gửi file lên Discord...');
 
-            await interaction.editReply({
+            await interaction.editReply(
+                '📊 Đang gửi bảng xếp hạng...'
+            );
+
+            const message = await interaction.followUp({
                 content: '📊 Bảng xếp hạng mới nhất của giải đấu:',
                 files: [file]
             });
+
+            console.log('[EXPORT] Follow-up attachments:',
+                message.attachments.map(a => ({
+                    name: a.name,
+                    url: a.url,
+                    size: a.size
+                }))
+            );
 
             console.log('[EXPORT] Gửi file thành công!');
 
