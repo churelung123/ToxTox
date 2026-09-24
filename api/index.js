@@ -44,20 +44,6 @@ async function getDiscordClient() {
     }
 
     await discordLoginPromise;
-    console.log('========== DISCORD BOT IDENTITY ==========');
-    console.log('[BOT]', {
-        userId: discordClient.user?.id || null,
-        username: discordClient.user?.username || null,
-        tag: discordClient.user?.tag || null
-    });
-
-    console.log('[EXPECTED CLIENT ID]', {
-        clientId: process.env.CLIENT_ID,
-        matches:
-            discordClient.user?.id === process.env.CLIENT_ID
-    });
-
-    console.log('==========================================');
 
     return discordClient;
 }
@@ -82,40 +68,6 @@ async function getDiscordGuild(guildId) {
     // Đảm bảo cache channels / roles có dữ liệu
     await guild.channels.fetch();
     await guild.roles.fetch();
-
-    console.log('========== DISCORD GUILD ROLE DEBUG ==========');
-
-    console.log('[GUILD]', {
-        guildId: guild.id,
-        guildName: guild.name
-    });
-
-    console.log('[TARGET ROLE]', {
-        roleId: '1552017048987631687',
-        existsInCache: guild.roles.cache.has('1552017048987631687'),
-        roleName: guild.roles.cache.get('1552017048987631687')?.name || null
-    });
-
-    try {
-        const targetRole = await guild.roles.fetch('1552017048987631687');
-
-        console.log('[TARGET ROLE FETCH]', {
-            success: !!targetRole,
-            roleId: targetRole?.id || null,
-            roleName: targetRole?.name || null,
-            roleGuildId: targetRole?.guild?.id || null
-        });
-    } catch (error) {
-        console.error('[TARGET ROLE FETCH ERROR]', {
-            roleId: '1552017048987631687',
-            guildId: guild.id,
-            error: error.message,
-            code: error.code,
-            status: error.status
-        });
-    }
-
-    console.log('==============================================');
 
     return guild;
 }

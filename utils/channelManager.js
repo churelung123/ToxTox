@@ -44,46 +44,78 @@ function slugify(str) {
 // PERMISSION
 // ============================================================
 
-async function buildBasePermissions(guild) {
-    await guild.roles.fetch({ force: true });
+function buildBasePermissions(guild) {
 
-    const permissionOverwrites = [
-        {
-            id: guild.roles.everyone.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-        }
-    ];
-
-    for (const roleId of ALLOWED_ROLE_IDS) {
-        const role = guild.roles.cache.get(roleId);
-
-        if (!role) {
-            throw new Error(
-                `[PERMISSION ERROR] Không tìm thấy role ${roleId} trong guild ${guild.id}`
-            );
-        }
-
-        console.log('[PERMISSION] Role found:', {
-            roleId: role.id,
-            roleName: role.name
-        });
-
-        permissionOverwrites.push({
-            id: role,
-            allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-                PermissionFlagsBits.AttachFiles,
-                PermissionFlagsBits.ManageMessages
-            ]
-        });
+    if (!guild) {
+        throw new Error(
+            'buildBasePermissions: guild không tồn tại'
+        );
     }
 
+    if (!guild.roles?.cache) {
+        throw new Error(
+            'buildBasePermissions: guild.roles.cache không tồn tại'
+        );
+    }
+
+    const permissionOverwrites = [
+
+        {
+            id: guild.roles.everyone.id,
+
+            deny: [
+                PermissionFlagsBits.ViewChannel
+            ]
+        }
+
+    ];
+
+    // --------------------------------------------------------
+    // STAFF / TRỌNG TÀI
+    // --------------------------------------------------------
+
+    for (const roleId of ALLOWED_ROLE_IDS) {
+    const role = guild.roles.cache.get(roleId);
+
+    if (!role) {
+        console.error(
+            `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+        );
+        continue;
+    }
+
+    console.log(
+        `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
+    );
+
+    permissionOverwrites.push({
+        id: role.id,
+        allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.ManageMessages
+        ]
+    });
+}
+
+    // --------------------------------------------------------
+    // ADMIN
+    // --------------------------------------------------------
+
     guild.roles.cache.forEach(role => {
-        if (role.permissions?.has(PermissionFlagsBits.Administrator)) {
+
+        if (
+            role.permissions?.has(
+                PermissionFlagsBits.Administrator
+            )
+        ) {
+
             permissionOverwrites.push({
-                id: role,
+
+                id: role.id,
+
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -146,7 +178,7 @@ async function getOrCreateRoundCategory(
                 type: ChannelType.GuildCategory,
 
                 permissionOverwrites:
-                    await buildBasePermissions(guild)
+                    buildBasePermissions(guild)
             });
     }
 
@@ -241,7 +273,7 @@ async function createMatchChannels(
                     parent: category.id,
 
                     permissionOverwrites:
-                        await buildBasePermissions(guild)
+                        buildBasePermissions(guild)
                 });
 
             // ------------------------------------------------
@@ -556,7 +588,7 @@ async function deleteAllMatchChannels(guild) {
                     isInRoundCategory
                 ) &&
                 channel.type !==
-                ChannelType.GuildCategory
+                    ChannelType.GuildCategory
             ) {
 
                 await channel
