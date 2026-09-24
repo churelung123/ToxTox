@@ -40,7 +40,7 @@ module.exports = {
             let status = 'completed';
             let summaryText = '';
 
-            // 2. Xác định kết quả mới theo chuẩn CSDL ('DRAW' cho hòa)
+            // 2. Xác định kết quả mới
             if (ketQua === 'p1_win') {
                 winnerId = match.player1_id;
                 summaryText = `🏆 <@${match.player1_id}> được xử THẮNG.`;
@@ -48,7 +48,7 @@ module.exports = {
                 winnerId = match.player2_id;
                 summaryText = `🏆 <@${match.player2_id}> được xử THẮNG.`;
             } else if (ketQua === 'draw') {
-                winnerId = 'DRAW'; // Đồng bộ với hàm export Excel
+                winnerId = 'DRAW'; // Đồng bộ chuẩn định dạng hòa
                 summaryText = `🤝 Trận đấu được xử HÒA.`;
             } else if (ketQua === 'reset') {
                 status = 'pending';
@@ -56,53 +56,47 @@ module.exports = {
                 summaryText = `🔄 Trận đấu đã được HỦY KẾT QUẢ và đưa về trạng thái chờ thi đấu.`;
             }
 
-            // 3. (Tùy chọn nâng cao) Hoàn tác thống kê cũ của 2 player nếu trận trước đó đã hoàn tất
-            // Giúp số liệu wins/losses/draws trong bảng players không bị cộng dồn sai lệch khi sửa kết quả
-            if (match.status === 'completed') {
-                if (match.winner_id === match.player1_id) {
-                    await pool.query('UPDATE players SET wins = GREATEST(wins - 1, 0) WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET losses = GREATEST(losses - 1, 0) WHERE discord_id = $1', [match.player2_id]);
-                } else if (match.winner_id === match.player2_id) {
-                    await pool.query('UPDATE players SET losses = GREATEST(losses - 1, 0) WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET wins = GREATEST(wins - 1, 0) WHERE discord_id = $1', [match.player2_id]);
-                } else if (match.winner_id === 'DRAW') {
-                    await pool.query('UPDATE players SET draws = GREATEST(draws - 1, 0) WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET draws = GREATEST(draws - 1, 0) WHERE discord_id = $1', [match.player2_id]);
-                }
-            }
-
-            // 4. Cập nhật thống kê mới vào bảng players nếu trạng thái mới là completed
-            if (status === 'completed') {
-                if (winnerId === match.player1_id) {
-                    await pool.query('UPDATE players SET wins = wins + 1 WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [match.player2_id]);
-                } else if (winnerId === match.player2_id) {
-                    await pool.query('UPDATE players = losses + 1 WHERE discord_id = $1', [match.player1_id]); // Sửa cú pháp đúng bên dưới
-                    // (Lưu ý: đoạn cộng dồn chuẩn xác ở dưới)
-                }
-            }
-
-            // Gộp phần cộng dồn chuẩn xác:
-            if (status === 'completed') {
-                if (winnerId === match.player1_id) {
-                    await pool.query('UPDATE players SET wins = wins + 1 WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [match.player2_id]);
-                } else if (winnerId === match.player2_id) {
-                    await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET wins = wins + 1 WHERE discord_id = $1', [match.player2_id]);
-                } else if (winnerId === 'DRAW') {
-                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player2_id]);
-                }
-            }
-
-            // 5. Cập nhật lại bảng matches trong CSDL Neon
+            // 3. Cập nhật trực tiếp kết quả vào bảng matches
             await pool.query(
                 'UPDATE matches SET status = $1, winner_id = $2 WHERE match_id = $3',
                 [status, winnerId, matchId]
             );
 
-            // 6. Thông báo kết quả điều chỉnh lên Discord
+            // 4. Recalculate (Tính lại toàn bộ số Thắng/Thua/Hòa chuẩn xác từ bảng matches cho tất cả người chơi)
+            // Cách này đảm bảo không bao giờ bị cộng dồn sai lệch dù admin có bấm set kết quả bao nhiêu lần.
+            const playersToUpdate = [match.player1_id, match.player2_id];
+            for (const playerId of playersToUpdate) {
+                if (!playerId) continue;
+
+                // Đếm số trận thắng thực tế từ bảng matches
+                const winsRes = await pool.query(
+                    `SELECT COUNT(*) FROM matches WHERE (player1_id = $1 AND winner_id = $1) OR (player2_id = $1 AND winner_id = $1)`,
+                    [playerId]
+                );
+                const wins = parseInt(winsRes.rows[0].count, 10);
+
+                // Đếm số trận thua thực tế từ bảng matches
+                const lossesRes = await pool.query(
+                    `SELECT COUNT(*) FROM matches WHERE status = 'completed' AND winner_id != 'DRAW' AND winner_id IS NOT NULL AND ((player1_id = $1 OR player2_id = $1) AND winner_id != $1)`,
+                    [playerId]
+                );
+                const losses = parseInt(lossesRes.rows[0].count, 10);
+
+                // Đếm số trận hòa thực tế từ bảng matches
+                const drawsRes = await pool.query(
+                    `SELECT COUNT(*) FROM matches WHERE winner_id = 'DRAW' AND (player1_id = $1 OR player2_id = $1)`,
+                    [playerId]
+                );
+                const draws = parseInt(drawsRes.rows[0].count, 10);
+
+                // Cập nhật lại chính xác vào bảng players
+                await pool.query(
+                    'UPDATE players SET wins = $1, losses = $2, draws = $3 WHERE discord_id = $4',
+                    [wins, losses, draws, playerId]
+                );
+            }
+
+            // 5. Thông báo kết quả điều chỉnh lên Discord
             const embed = new EmbedBuilder()
                 .setTitle(`⚖️ Quyết định của Trọng Tài / Ban Tổ Chức`)
                 .setDescription(`Đã cập nhật lại kết quả cho **Match ID: ${matchId}**\n\n**Kết quả mới:** ${summaryText}\n**Người can thiệp:** <@${interaction.user.id}>`)
