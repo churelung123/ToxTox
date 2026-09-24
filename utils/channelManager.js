@@ -75,30 +75,30 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-    const role = guild.roles.cache.get(roleId);
+        const role = guild.roles.cache.get(roleId);
 
-    if (!role) {
-        console.error(
-            `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+        if (!role) {
+            console.error(
+                `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+            );
+            continue;
+        }
+
+        console.log(
+            `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
         );
-        continue;
+
+        permissionOverwrites.push({
+            id: role.id,
+            allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.ManageMessages
+            ]
+        });
     }
-
-    console.log(
-        `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
-    );
-
-    permissionOverwrites.push({
-        id: role.id,
-        allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.ManageMessages
-        ]
-    });
-}
 
     // --------------------------------------------------------
     // ADMIN
@@ -279,6 +279,16 @@ async function createMatchChannels(
             // ------------------------------------------------
             // FETCH MEMBERS
             // ------------------------------------------------
+
+            for (const roleId of ALLOWED_ROLE_IDS) {
+                await channel.permissionOverwrites.edit(roleId, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true,
+                    AttachFiles: true,
+                    ManageMessages: true
+                }).catch(err => console.error(`[STAFF PERMISSION ERROR] Không thể cấp quyền cho role ${roleId}:`, err));
+            }
 
             let member1 = null;
             let member2 = null;
@@ -588,7 +598,7 @@ async function deleteAllMatchChannels(guild) {
                     isInRoundCategory
                 ) &&
                 channel.type !==
-                    ChannelType.GuildCategory
+                ChannelType.GuildCategory
             ) {
 
                 await channel
