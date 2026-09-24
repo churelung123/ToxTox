@@ -63,6 +63,9 @@ function readTournamentDataFromExcel(input) {
  */
 async function exportStandingsToExcel(data) {
     try {
+        console.log('[EXCEL] Bắt đầu tạo bảng xếp hạng...');
+        console.log('[EXCEL] Số lượng tuyển thủ:', data.length);
+
         const worksheet = xlsx.utils.json_to_sheet(data);
 
         worksheet['!cols'] = [
@@ -82,11 +85,16 @@ async function exportStandingsToExcel(data) {
             'Standings'
         );
 
-        // Tạo file Excel trong bộ nhớ
         const buffer = xlsx.write(workbook, {
             type: 'buffer',
             bookType: 'xlsx'
         });
+
+        console.log(
+            '[EXCEL] Tạo file thành công:',
+            buffer.length,
+            'bytes'
+        );
 
         return buffer;
 
