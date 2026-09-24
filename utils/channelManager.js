@@ -44,6 +44,10 @@ function slugify(str) {
 // PERMISSION
 // ============================================================
 
+// ============================================================
+// PERMISSION
+// ============================================================
+
 function buildBasePermissions(guild) {
 
     if (!guild) {
@@ -52,39 +56,24 @@ function buildBasePermissions(guild) {
         );
     }
 
-    if (!guild.roles?.cache) {
-        throw new Error(
-            'buildBasePermissions: guild.roles.cache không tồn tại'
-        );
-    }
-
     const permissionOverwrites = [
-
         {
             id: guild.roles.everyone.id,
-
             deny: [
                 PermissionFlagsBits.ViewChannel
             ]
         }
-
     ];
 
     // --------------------------------------------------------
-    // STAFF / TRỌNG TÀI
+    // STAFF / TRỌNG TÀI (Kiểm tra an toàn bằng cache hoặc fetch)
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-
-        if (
-            roleId &&
-            guild.roles.cache.has(roleId)
-        ) {
-
+        if (roleId) {
+            // Cấp quyền trực tiếp theo ID cấu hình dù cache có thể chưa đồng bộ kịp
             permissionOverwrites.push({
-
                 id: roleId,
-
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -97,30 +86,28 @@ function buildBasePermissions(guild) {
     }
 
     // --------------------------------------------------------
-    // ADMIN
+    // ADMIN (Duyệt qua các role có quyền Administrator)
     // --------------------------------------------------------
 
-    guild.roles.cache.forEach(role => {
-
-        if (
-            role.permissions?.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-
-            permissionOverwrites.push({
-
-                id: role.id,
-
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.SendMessages,
-                    PermissionFlagsBits.ReadMessageHistory,
-                    PermissionFlagsBits.ManageMessages
-                ]
-            });
-        }
-    });
+    if (guild.roles?.cache) {
+        guild.roles.cache.forEach(role => {
+            if (
+                role.permissions?.has(
+                    PermissionFlagsBits.Administrator
+                )
+            ) {
+                permissionOverwrites.push({
+                    id: role.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageMessages
+                    ]
+                });
+            }
+        });
+    }
 
     return permissionOverwrites;
 }
