@@ -75,10 +75,16 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-        if (roleId) {
-            // Vẫn giữ lại kiểm tra cache, nhưng nếu guild có tồn tại role ID đó trực tiếp thì add thẳng vào overwrite
+
+        if (
+            roleId &&
+            guild.roles.cache.has(roleId)
+        ) {
+
             permissionOverwrites.push({
+
                 id: roleId,
+
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
