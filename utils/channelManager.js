@@ -44,7 +44,7 @@ function slugify(str) {
 // PERMISSION
 // ============================================================
 
-function buildBasePermissions(guild) {
+async function buildBasePermissions(guild) {
 
     console.log('[PERMISSION DEBUG] Guild:', {
         guildId: guild.id,
@@ -89,21 +89,35 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
-        const role = guild.roles.cache.get(roleId);
+
+        if (!roleId) {
+            continue;
+        }
+
+        const role = await guild.roles.fetch(roleId).catch(error => {
+            console.error(
+                `[PERMISSION ERROR] Không thể fetch role ${roleId}:`,
+                error.message
+            );
+
+            return null;
+        });
 
         if (!role) {
             console.error(
-                `[PERMISSION ERROR] Không tìm thấy ALLOWED_ROLE_ID ${roleId} trong guild ${guild.id}`
+                `[PERMISSION ERROR] Role ${roleId} không tồn tại hoặc bot không thể truy cập role.`
             );
+
             continue;
         }
 
         console.log(
-            `[PERMISSION] Đã cấp quyền cho role: ${role.name} (${role.id})`
+            `[PERMISSION] Đã tìm thấy role: ${role.name} (${role.id})`
         );
 
         permissionOverwrites.push({
             id: role.id,
+
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -192,7 +206,7 @@ async function getOrCreateRoundCategory(
                 type: ChannelType.GuildCategory,
 
                 permissionOverwrites:
-                    buildBasePermissions(guild)
+                    await buildBasePermissions(guild)
             });
     }
 
@@ -287,7 +301,7 @@ async function createMatchChannels(
                     parent: category.id,
 
                     permissionOverwrites:
-                        buildBasePermissions(guild)
+                        await buildBasePermissions(guild)
                 });
 
             // ------------------------------------------------
