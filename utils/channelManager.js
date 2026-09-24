@@ -75,16 +75,13 @@ function buildBasePermissions(guild) {
     // --------------------------------------------------------
 
     for (const roleId of ALLOWED_ROLE_IDS) {
+        console.log(`[PERM DEBUG] Checking roleId: ${roleId}`);
+        console.log(`[PERM DEBUG] cache.has? ${guild.roles.cache.has(roleId)}`);
+        console.log(`[PERM DEBUG] role object:`, guild.roles.cache.get(roleId)?.name);
 
-        if (
-            roleId &&
-            guild.roles.cache.has(roleId)
-        ) {
-
+        if (roleId && guild.roles.cache.has(roleId)) {
             permissionOverwrites.push({
-
                 id: roleId,
-
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
@@ -93,6 +90,9 @@ function buildBasePermissions(guild) {
                     PermissionFlagsBits.ManageMessages
                 ]
             });
+            console.log(`[PERM DEBUG] ✅ Added overwrite for role ${roleId}`);
+        } else {
+            console.warn(`[PERM DEBUG] ❌ Role ${roleId} NOT found in cache → bỏ qua`);
         }
     }
 
