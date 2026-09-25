@@ -1,41 +1,48 @@
 // File: utils/geminiVision.js
 const { GoogleGenAI } = require('@google/genai');
 
-// Khởi tạo Gemini client sử dụng biến môi trường GEMINI_API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function analyzePokemonTeamImages(imageUrl) {
+async function analyzePokemonTeamImages(imageUrls) {
     try {
-        // Tải hình ảnh từ URL (ví dụ URL đính kèm của Discord) dưới dạng buffer
-        const imageResponse = await fetch(imageUrl);
-        if (!imageResponse.ok) {
-            throw new Error(`Không thể tải hình ảnh từ URL (${imageResponse.status})`);
+        const imageParts = [];
+
+        for (const url of imageUrls) {
+            console.log('[GEMINI VISION] Fetching image from URL:', url);
+            const imageResponse = await fetch(url);
+
+            if (!imageResponse.ok) {
+                console.error(`[GEMINI VISION] Failed to fetch image. Status: ${imageResponse.status} for URL: ${url}`);
+                continue;
+            }
+
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const base64Image = buffer.toString('base64');
+            const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+
+            imageParts.push({
+                inlineData: {
+                    data: base64Image,
+                    mimeType: mimeType
+                }
+            });
         }
 
-        const arrayBuffer = await imageResponse.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
-        // Chuyển đổi buffer thành chuỗi base64 để truyền cho Gemini
-        const base64Image = buffer.toString('base64');
-        
-        // Lấy định dạng mimeType của ảnh (mặc định là image/jpeg nếu không có)
-        const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+        if (imageParts.length === 0) {
+            return '❌ Không thể tải được dữ liệu hình ảnh (Link Discord có thể đã hết hạn hoặc không hợp lệ).';
+        }
 
-        // Gọi Gemini 2.5 Flash để đọc và phân tích ảnh
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: [
-                {
-                    inlineData: {
-                        data: base64Image,
-                        mimeType: mimeType
-                    }
-                },
+                ...imageParts,
                 {
                     text: `Hãy đọc chi tiết toàn bộ team Pokémon trong hình ảnh này 
                     - Nếu hình ảnh là Move&More, lấy ra tên Pokémon, ability, item và danh sách các chiêu thức của từng pokemon.
                     - Nếu hình ảnh là Stats, lấy ra tên tính cách của từng pokemon dựa vào mũi tên tăng giảm của các chỉ số
                     In ra chỉ số theo dạng
+                    
                 "Froslass-Mega @ Froslassite
                 Ability: Snow Warning
                 Timid Nature
