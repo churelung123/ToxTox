@@ -9,7 +9,13 @@ module.exports = {
         .addAttachmentOption(option =>
             option
                 .setName('image')
-                .setDescription('Hình ảnh team sheet của bạn')
+                .setDescription('Hình ảnh team Move&More')
+                .setRequired(true)
+        )
+        .addAttachmentOption(option =>
+            option
+                .setName('image')
+                .setDescription('Hình ảnh team Stats')
                 .setRequired(true)
         ),
 
