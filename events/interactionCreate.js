@@ -55,7 +55,7 @@ module.exports = {
                 // Xử lý nút "Gọi Mod"
                 if (customId.startsWith('call_mod_')) {
                     return interaction.reply({
-                        content: `⚠️ <@${interaction.user.id}> đã yêu cầu trợ giúp. Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này!`,
+                        content: `⚠️ <@${userId}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`,
                         ephemeral: false
                     });
                 }
@@ -144,7 +144,7 @@ module.exports = {
                 const allPlayersRes = await pool.query(
                     'SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC'
                 );
-                
+
                 if (typeof exportStandingsToExcel === 'function') {
                     await exportStandingsToExcel(allPlayersRes.rows);
                 }
@@ -164,8 +164,8 @@ module.exports = {
 
             // --- ĐỐI THỦ BẤM "KHIẾU NẠI ❌" ---
             else if (customId.startsWith('dispute_match_')) {
-                await interaction.reply({
-                    content: `⚠️ **Đã gửi khiếu nại!** Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này.`,
+                return interaction.reply({
+                    content: `⚠️ **Đã gửi khiếu nại!** <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) sẽ vào kiểm tra bàn đấu này.`,
                     ephemeral: false
                 });
             }

@@ -392,55 +392,26 @@ async function createMatchChannels(
             // BUTTONS
             // ------------------------------------------------
 
-            const row =
-                new ActionRowBuilder()
-                    .addComponents(
+            const row = new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`win_p1_${match.match_id}`)
+                        .setLabel(`🏆 ${p1 ? p1.in_game_name : 'Player 1'} thắng`)
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(true),
 
-                        new ButtonBuilder()
-                            .setCustomId(
-                                `win_p1_${match.match_id}`
-                            )
-                            .setLabel(
-                                `🏆 ${p1 ? p1.in_game_name : 'Player 1'} thắng`
-                            )
-                            .setStyle(
-                                ButtonStyle.Primary
-                            )
-                            .setDisabled(true),
+                    new ButtonBuilder()
+                        .setCustomId(`win_p2_${match.match_id}`)
+                        .setLabel(`🏆 ${p2 ? p2.in_game_name : 'Player 2'} thắng`)
+                        .setStyle(ButtonStyle.Primary)
+                        .setDisabled(true),
 
-                        new ButtonBuilder()
-                            .setCustomId(
-                                `win_p2_${match.match_id}`
-                            )
-                            .setLabel(
-                                `🏆 ${p2 ? p2.in_game_name : 'Player 2'} thắng`
-                            )
-                            .setStyle(
-                                ButtonStyle.Primary
-                            )
-                            .setDisabled(true),
-
-                        new ButtonBuilder()
-                            .setCustomId(
-                                `draw_${match.match_id}`
-                            )
-                            .setLabel('🤝 Hòa')
-                            .setStyle(
-                                ButtonStyle.Secondary
-                            )
-                            .setDisabled(true),
-
-                        new ButtonBuilder()
-                            .setCustomId(
-                                `call_mod_${match.match_id}`
-                            )
-                            .setLabel('⚠️ Gọi Mod')
-                            .setStyle(
-                                ButtonStyle.Danger
-                            )
-                            .setDisabled(true)
-
-                    );
+                    new ButtonBuilder()
+                        .setCustomId(`call_mod_${match.match_id}`)
+                        .setLabel('⚠️ Gọi Mod')
+                        .setStyle(ButtonStyle.Danger)
+                        .setDisabled(true)
+                );
 
             // ------------------------------------------------
             // SEND FIRST MESSAGE
