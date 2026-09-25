@@ -149,7 +149,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                 await exportMatchesByRoundToExcel();
             }
 
-            const resultDisplay = winnerId === `🏆 Người thắng: <@${winnerId}>`;
+            const resultDisplay = `🏆 Người thắng: <@${winnerId}>`;
 
             return res.status(200).json({
                 type: 7,

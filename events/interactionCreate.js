@@ -145,7 +145,7 @@ module.exports = {
                     await exportMatchesByRoundToExcel();
                 }
 
-                const resultDisplay = winnerId === `🏆 Người thắng: <@${winnerId}>`;
+                const resultDisplay = `🏆 Người thắng: <@${winnerId}>`;
 
                 const embedSuccess = new EmbedBuilder()
                     .setTitle('🎉 TRẬN ĐẤU HOÀN TẤT')
