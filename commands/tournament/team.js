@@ -8,13 +8,13 @@ module.exports = {
         .setDescription('Gửi ảnh team Pokémon để Gemini AI phân tích chi tiết')
         .addAttachmentOption(option =>
             option
-                .setName('image')
+                .setName('image Move')
                 .setDescription('Hình ảnh team Move&More')
                 .setRequired(true)
         )
         .addAttachmentOption(option =>
             option
-                .setName('image')
+                .setName('image Stats')
                 .setDescription('Hình ảnh team Stats')
                 .setRequired(true)
         ),
@@ -23,7 +23,7 @@ module.exports = {
         await interaction.deferReply();
 
         // Sử dụng hàm getAttachment đã được hỗ trợ sẵn trong mockInteraction của bạn
-        const attachment = interaction.options.getAttachment('image');
+        const attachment = interaction.options.getAttachment('image Move') || interaction.options.getAttachment('image Stats');
 
         if (!attachment || !attachment.url) {
             return interaction.editReply('❌ Vui lòng đính kèm một tệp hình ảnh hợp lệ!');
@@ -34,7 +34,7 @@ module.exports = {
 
         // Trả kết quả phân tích về cho người dùng
         return interaction.editReply({
-            content: `🔍 **Phân tích Team Pokémon bởi Gemini AI:**\n\n${analysisResult}`
+            content: `${analysisResult}`
         });
     }
 };
