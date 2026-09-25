@@ -1,38 +1,43 @@
 // File: commands/tournament/team.js
 const { SlashCommandBuilder } = require('discord.js');
-const { analyzePokemonTeamImage } = require('../../utils/geminiVision');
+const { analyzePokemonTeamImages } = require('../../utils/geminiVision');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('team')
-        .setDescription('Gửi ảnh team Pokémon để Gemini AI phân tích chi tiết')
+        .setDescription('Gửi 1 hoặc 2 ảnh team Pokémon để Gemini AI phân tích chi tiết')
         .addAttachmentOption(option =>
             option
-                .setName('image Move')
-                .setDescription('Hình ảnh team Move&More')
+                .setName('image1')
+                .setDescription('Hình ảnh team sheet thứ nhất')
                 .setRequired(true)
         )
         .addAttachmentOption(option =>
             option
-                .setName('image Stats')
-                .setDescription('Hình ảnh team Stats')
-                .setRequired(true)
+                .setName('image2')
+                .setDescription('Hình ảnh team sheet thứ hai (tùy chọn)')
+                .setRequired(false)
         ),
 
     async execute(interaction) {
         await interaction.deferReply();
 
-        // Sử dụng hàm getAttachment đã được hỗ trợ sẵn trong mockInteraction của bạn
-        const attachment = interaction.options.getAttachment('image Move') || interaction.options.getAttachment('image Stats');
+        const attachment1 = interaction.options.getAttachment('image1');
+        const attachment2 = interaction.options.getAttachment('image2');
 
-        if (!attachment || !attachment.url) {
-            return interaction.editReply('❌ Vui lòng đính kèm một tệp hình ảnh hợp lệ!');
+        if (!attachment1 || !attachment1.url) {
+            return interaction.editReply('❌ Vui lòng đính kèm ít nhất hình ảnh hợp lệ đầu tiên!');
         }
 
-        // Gọi hàm phân tích ảnh từ module geminiVision.js
-        const analysisResult = await analyzePokemonTeamImage(attachment.url);
+        // Gom các URL ảnh lại thành một mảng
+        const imageUrls = [attachment1.url];
+        if (attachment2 && attachment2.url) {
+            imageUrls.push(attachment2.url);
+        }
 
-        // Trả kết quả phân tích về cho người dùng
+        // Gọi hàm xử lý nhiều ảnh
+        const analysisResult = await analyzePokemonTeamImages(imageUrls);
+        
         return interaction.editReply({
             content: `${analysisResult}`
         });
