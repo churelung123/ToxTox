@@ -28,7 +28,6 @@ async function initDatabase() {
                 team_sheet_url TEXT,
                 wins INT DEFAULT 0,
                 losses INT DEFAULT 0,
-                draws INT DEFAULT 0,
                 is_dropped INT DEFAULT 0
             );
         `);

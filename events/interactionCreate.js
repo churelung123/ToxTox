@@ -30,8 +30,8 @@ module.exports = {
         if (interaction.isButton()) {
             const customId = interaction.customId;
 
-            // --- BÁO KẾT QUẢ BẰNG NÚT (P1 thắng / P2 thắng / Hòa / Gọi Mod) ---
-            if (customId.startsWith('win_p1_') || customId.startsWith('win_p2_') || customId.startsWith('draw_') || customId.startsWith('call_mod_')) {
+            // --- BÁO KẾT QUẢ BẰNG NÚT (P1 thắng / P2 thắng/ Gọi Mod) ---
+            if (customId.startsWith('win_p1_') || customId.startsWith('win_p2_') || customId.startsWith('call_mod_')) {
                 const matchId = customId.split('_').pop();
                 const matchRes = await pool.query('SELECT * FROM matches WHERE match_id = $1', [matchId]);
                 const match = matchRes.rows[0];
@@ -73,10 +73,6 @@ module.exports = {
                     reportedWinner = match.player2_id;
                     scoreP1 = 0;
                     scoreP2 = 1;
-                } else if (customId.startsWith('draw_')) {
-                    reportedWinner = 'DRAW';
-                    scoreP1 = 0;
-                    scoreP2 = 0;
                 }
 
                 // Lưu kết quả tạm thời vào DB và chờ đối thủ xác nhận
@@ -87,7 +83,7 @@ module.exports = {
                 `, [scoreP1, scoreP2, interaction.user.id, reportedWinner, matchId]);
 
                 const opponentId = (interaction.user.id === match.player1_id) ? match.player2_id : match.player1_id;
-                const resultText = reportedWinner === 'DRAW' ? 'Hòa' : `<@${reportedWinner}> Thắng`;
+                const resultText = reportedWinner === `<@${reportedWinner}> Thắng`;
 
                 const confirmEmbed = new EmbedBuilder()
                     .setTitle('⏳ CHỜ XÁC NHẬN KẾT QUẢ')
@@ -127,10 +123,7 @@ module.exports = {
                 await pool.query(`UPDATE matches SET status = 'completed' WHERE match_id = $1`, [matchId]);
 
                 // Cập nhật điểm cho Players
-                if (winnerId === 'DRAW') {
-                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player1_id]);
-                    await pool.query('UPDATE players SET draws = draws + 1 WHERE discord_id = $1', [match.player2_id]);
-                } else if (winnerId) {
+                if (winnerId) {
                     const loserId = (winnerId === match.player1_id) ? match.player2_id : match.player1_id;
                     await pool.query('UPDATE players SET wins = wins + 1 WHERE discord_id = $1', [winnerId]);
                     await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [loserId]);
@@ -142,7 +135,7 @@ module.exports = {
 
                 // Xuất lại 2 file Excel (Standings & Lịch sử đối đầu theo vòng)
                 const allPlayersRes = await pool.query(
-                    'SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC'
+                    'SELECT discord_id, in_game_name, wins, losses as points FROM players ORDER BY points DESC, wins DESC'
                 );
 
                 if (typeof exportStandingsToExcel === 'function') {
@@ -152,7 +145,7 @@ module.exports = {
                     await exportMatchesByRoundToExcel();
                 }
 
-                const resultDisplay = winnerId === 'DRAW' ? '🤝 Hòa' : `🏆 Người thắng: <@${winnerId}>`;
+                const resultDisplay = winnerId === `🏆 Người thắng: <@${winnerId}>`;
 
                 const embedSuccess = new EmbedBuilder()
                     .setTitle('🎉 TRẬN ĐẤU HOÀN TẤT')

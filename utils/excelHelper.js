@@ -130,9 +130,6 @@ async function exportMatchesByRoundToExcel(fileName) {
                     m.player1_score AS "Tỷ số P1",
                     m.player2_score AS "Tỷ số P2",
                     CASE
-                        WHEN m.winner_id = 'DRAW'
-                            THEN 'Hòa'
-
                         WHEN m.winner_id = p1.discord_id
                             THEN p1.in_game_name
 

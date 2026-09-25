@@ -7,7 +7,7 @@ const { pool, createMatch } = require('./database');
 async function generateNextRoundPairings(nextRound) {
     // 1. Lấy danh sách tuyển thủ còn thi đấu (chưa dropped)
     const playersRes = await pool.query(`
-        SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points 
+        SELECT discord_id, in_game_name, wins, losses as points 
         FROM players 
         WHERE is_dropped = 0 OR is_dropped IS NULL
         ORDER BY points DESC, wins DESC, RANDOM()

@@ -22,8 +22,6 @@ module.exports = {
                 discord_id AS "Discord ID",
                 wins AS "Thắng",
                 losses AS "Thua",
-                draws AS "Hòa",
-                (wins * 3 + draws) AS "Điểm"
             FROM players 
             ORDER BY "Điểm" DESC, wins DESC
         `);

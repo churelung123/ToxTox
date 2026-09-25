@@ -107,7 +107,7 @@ module.exports = {
                 const losses = parseInt(lossesRes.rows[0].count, 10);
 
                 await pool.query(
-                    'UPDATE players SET wins = $1, losses = $2, draws = 0 WHERE discord_id = $3',
+                    'UPDATE players SET wins = $1, losses = $2 WHERE discord_id = $3',
                     [wins, losses, playerId]
                 );
             }

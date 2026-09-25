@@ -71,11 +71,6 @@ module.exports = {
                 .setStyle(ButtonStyle.Primary)
                 .setDisabled(false),
             new ButtonBuilder()
-                .setCustomId(`draw_${match.match_id}`)
-                .setLabel(`🤝 Hòa`)
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(false),
-            new ButtonBuilder()
                 .setCustomId(`call_mod_${match.match_id}`)
                 .setLabel(`⚠️ Gọi Mod`)
                 .setStyle(ButtonStyle.Danger)

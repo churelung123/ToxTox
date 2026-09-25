@@ -68,7 +68,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                 data: {
                     embeds: [{
                         title: '⏳ CHỜ XÁC NHẬN KẾT QUẢ',
-                        description: `<@${userId}> đã báo kết quả: **${resultText}**\n\n<@${opponentId}> vui lòng bấm **Xác nhận** nếu thông tin chính xác, hoặc bấm **Khiếu nại / Gọi Mod** nếu có tranh chấp.`,
+                        description: `<@${userId}> đã báo kết quả: **${resultText}**\n\n<@${opponentId}> vui lòng bấm **Xác nhận** nếu thông tin chính xác, hoặc bấm **Gọi Mod** nếu có tranh chấp.`,
                         color: 0xF1C40F
                     }],
                     components: [
@@ -84,7 +84,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                                 {
                                     type: 2,
                                     custom_id: `dispute_match_${matchId}`,
-                                    label: 'Khiếu nại / Gọi Mod ⚠️',
+                                    label: 'Gọi Mod ⚠️',
                                     style: 4 // Đỏ
                                 }
                             ]
@@ -127,10 +127,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                 [matchId]
             );
 
-            if (winnerId === 'DRAW') {
-                await pool.query(`UPDATE players SET draws = draws + 1 WHERE discord_id = $1`, [match.player1_id]);
-                await pool.query(`UPDATE players SET draws = draws + 1 WHERE discord_id = $1`, [match.player2_id]);
-            } else if (winnerId) {
+            if (winnerId) {
                 const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
                 await pool.query(`UPDATE players SET wins = wins + 1 WHERE discord_id = $1`, [winnerId]);
                 await pool.query(`UPDATE players SET losses = losses + 1 WHERE discord_id = $1`, [loserId]);
@@ -138,7 +135,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
 
             const allPlayersRes = await pool.query(
                 `
-                SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) AS points
+                SELECT discord_id, in_game_name, wins, losses AS points
                 FROM players
                 ORDER BY points DESC, wins DESC
                 `
@@ -152,7 +149,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                 await exportMatchesByRoundToExcel();
             }
 
-            const resultDisplay = winnerId === 'DRAW' ? '🤝 Hòa' : `🏆 Người thắng: <@${winnerId}>`;
+            const resultDisplay = winnerId === `🏆 Người thắng: <@${winnerId}>`;
 
             return res.status(200).json({
                 type: 7,

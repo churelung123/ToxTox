@@ -48,7 +48,7 @@ module.exports = {
         }
         
         const allPlayersRes = await pool.query(
-            'SELECT discord_id, in_game_name, wins, losses, draws, (wins * 3 + draws) as points FROM players ORDER BY points DESC, wins DESC'
+            'SELECT discord_id, in_game_name, wins, losses as points FROM players ORDER BY points DESC, wins DESC'
         );
         if (typeof exportStandingsToExcel === 'function') {
             await exportStandingsToExcel(allPlayersRes.rows);
