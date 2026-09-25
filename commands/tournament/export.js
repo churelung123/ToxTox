@@ -21,9 +21,9 @@ module.exports = {
                 in_game_name AS "Người chơi",
                 discord_id AS "Discord ID",
                 wins AS "Thắng",
-                losses AS "Thua",
+                losses AS "Thua"
             FROM players 
-            ORDER BY "Điểm" DESC, wins DESC
+            ORDER BY wins DESC, losses ASC
         `);
 
             console.log('[EXPORT] DB rows:', res.rows.length);
