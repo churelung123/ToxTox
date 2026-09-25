@@ -1,16 +1,12 @@
 // File: api/index.js
 
 const { verifyKey } = require('discord-interactions');
-const {
-    Client,
-    GatewayIntentBits
-} = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 
 const { pool } = require('../utils/database');
-const {
-    exportStandingsToExcel,
-    exportMatchesByRoundToExcel
-} = require('../utils/excelHelper');
+
+// IMPORT MATCH HANDLER
+const { handleMatchButton } = require('../events/matchHandler');
 
 // ============================================================
 // DISCORD CLIENT CHO SERVERLESS
@@ -65,7 +61,6 @@ async function getDiscordGuild(guildId) {
         );
     }
 
-    // Đảm bảo cache channels / roles có dữ liệu
     await guild.channels.fetch();
     await guild.roles.fetch();
 
@@ -121,15 +116,6 @@ function getRawBody(req) {
 // ============================================================
 // DISCORD INTERACTION WEBHOOK
 // ============================================================
-//
-// Slash command được ACK ngay bằng type: 5 để Discord không
-// timeout trong lúc Vercel cold start / login Discord / query DB.
-//
-// @vercel/functions hỗ trợ giữ execution chạy sau khi response
-// HTTP đã được trả về.
-//
-// Nếu package chưa có, code sẽ fallback sang await trực tiếp.
-//
 
 let vercelWaitUntil = null;
 
@@ -159,10 +145,6 @@ async function editOriginalInteraction(
         `https://discord.com/api/v10/webhooks/` +
         `${applicationId}/${interactionToken}/messages/@original`;
 
-    // ----------------------------------------------------------
-    // KHÔNG CÓ FILE
-    // ----------------------------------------------------------
-
     if (!payload.files || payload.files.length === 0) {
         const response = await fetch(url, {
             method: 'PATCH',
@@ -185,32 +167,18 @@ async function editOriginalInteraction(
         return;
     }
 
-    // ----------------------------------------------------------
-    // CÓ FILE → MULTIPART/FORM-DATA
-    // ----------------------------------------------------------
-
     const formData = new FormData();
-
     const attachments = [];
 
     payload.files.forEach((file, index) => {
-
-        // AttachmentBuilder của discord.js v14
         const buffer = file.attachment;
-
         const filename =
             file.name ||
             `file-${index}`;
 
-        if (!buffer) {
+        if (!buffer || !Buffer.isBuffer(buffer)) {
             throw new Error(
-                `Attachment ${index} không có dữ liệu`
-            );
-        }
-
-        if (!Buffer.isBuffer(buffer)) {
-            throw new Error(
-                `Attachment ${index} không phải Buffer`
+                `Attachment ${index} không hợp lệ`
             );
         }
 
@@ -234,27 +202,16 @@ async function editOriginalInteraction(
         );
     });
 
-    // Payload mà Discord API cần
     const payloadJson = {
         ...payload
     };
 
     delete payloadJson.files;
-
-    payloadJson.attachments =
-        attachments;
+    payloadJson.attachments = attachments;
 
     formData.append(
         'payload_json',
         JSON.stringify(payloadJson)
-    );
-
-    console.log(
-        '[DISCORD] Sending multipart attachment:',
-        {
-            files: attachments,
-            content: payload.content
-        }
     );
 
     const response = await fetch(url, {
@@ -271,10 +228,6 @@ async function editOriginalInteraction(
             `(${response.status}): ${errorText}`
         );
     }
-
-    console.log(
-        '[DISCORD] Attachment uploaded successfully'
-    );
 }
 
 function normalizeCommandResponse(result) {
@@ -284,10 +237,7 @@ function normalizeCommandResponse(result) {
         };
     }
 
-    if (
-        result &&
-        typeof result === 'object'
-    ) {
+    if (result && typeof result === 'object') {
         return result;
     }
 
@@ -379,10 +329,6 @@ module.exports = async (req, res) => {
 
     try {
 
-        // --------------------------------------------------------
-        // Verify Discord signature
-        // --------------------------------------------------------
-
         const rawBody =
             await getRawBody(req);
 
@@ -407,10 +353,7 @@ module.exports = async (req, res) => {
                 rawBody.toString('utf-8')
             );
 
-        // --------------------------------------------------------
         // Discord PING
-        // --------------------------------------------------------
-
         if (interaction.type === 1) {
             return res
                 .status(200)
@@ -419,10 +362,7 @@ module.exports = async (req, res) => {
                 });
         }
 
-        // --------------------------------------------------------
         // SLASH COMMAND
-        // --------------------------------------------------------
-
         if (interaction.type === 2) {
 
             const { name } =
@@ -443,22 +383,6 @@ module.exports = async (req, res) => {
                     });
             }
 
-            // ----------------------------------------------------
-            // ACK NGAY LẬP TỨC
-            // ----------------------------------------------------
-            //
-            // type: 5 =
-            // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
-            //
-            // Discord sẽ hiển thị:
-            //
-            // "ToxToxtric đang suy nghĩ..."
-            //
-            // nhưng interaction đã được xác nhận ngay.
-            //
-            // Sau đó command mới được chạy.
-            //
-
             res.status(200).json({
                 type: 5
             });
@@ -469,14 +393,6 @@ module.exports = async (req, res) => {
                     command
                 );
 
-            // ----------------------------------------------------
-            // VERCEL WAIT UNTIL
-            // ----------------------------------------------------
-            //
-            // Giữ execution chạy tiếp sau khi HTTP response
-            // đã trả về Discord.
-            //
-
             if (
                 typeof vercelWaitUntil ===
                 'function'
@@ -484,438 +400,22 @@ module.exports = async (req, res) => {
                 vercelWaitUntil(
                     commandPromise
                 );
-
                 return;
             }
 
-            // Fallback nếu @vercel/functions chưa tồn tại.
             await commandPromise;
-
             return;
         }
 
-        // --------------------------------------------------------
-        // BUTTON / MESSAGE COMPONENT
-        // --------------------------------------------------------
-
+        // BUTTON / MESSAGE COMPONENT (GỌI QUA MATCH HANDLER)
         if (interaction.type === 3) {
-
-            const customId =
-                interaction.data.custom_id;
-
+            const customId = interaction.data.custom_id;
             const userId =
                 interaction.member?.user?.id ||
                 interaction.user?.id;
 
-            // ----------------------------------------------------
-            // RESULT BUTTON
-            // ----------------------------------------------------
-
-            if (
-                customId.startsWith('win_p1_') ||
-                customId.startsWith('win_p2_') ||
-                customId.startsWith('call_mod_')
-            ) {
-
-                const matchId =
-                    customId.split('_').pop();
-
-                const matchRes =
-                    await pool.query(
-                        'SELECT * FROM matches WHERE match_id = $1',
-                        [matchId]
-                    );
-
-                const match =
-                    matchRes.rows[0];
-
-                if (!match) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '❌ Không tìm thấy thông tin trận đấu!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                if (
-                    userId !== match.player1_id &&
-                    userId !== match.player2_id
-                ) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '❌ Bạn không phải tuyển thủ trong trận đấu này!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                if (
-                    match.is_proof_submitted !== 1
-                ) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '⚠️ Bạn phải dùng lệnh `/gui-anh` để gửi bằng chứng trước khi chọn kết quả!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                if (
-                    match.status === 'completed'
-                ) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '✅ Trận đấu này đã kết thúc!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                // ----------------------------------------------
-                // GỌI MOD (Có tag Staff)
-                // ----------------------------------------------
-
-                if (
-                    customId.startsWith(
-                        'call_mod_'
-                    )
-                ) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    `⚠️ <@${userId}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`
-                            }
-                        });
-                }
-
-                let reportedWinner = null;
-                let scoreP1 = 0;
-                let scoreP2 = 0;
-
-                if (
-                    customId.startsWith(
-                        'win_p1_'
-                    )
-                ) {
-
-                    reportedWinner =
-                        match.player1_id;
-
-                    scoreP1 = 1;
-                    scoreP2 = 0;
-
-                } else if (
-                    customId.startsWith(
-                        'win_p2_'
-                    )
-                ) {
-
-                    reportedWinner =
-                        match.player2_id;
-
-                    scoreP1 = 0;
-                    scoreP2 = 1;
-                }
-
-                await pool.query(
-                    `
-                    UPDATE matches
-                    SET
-                        player1_score = $1,
-                        player2_score = $2,
-                        reported_by = $3,
-                        winner_id = $4,
-                        status = 'waiting_confirm'
-                    WHERE match_id = $5
-                    `,
-                    [
-                        scoreP1,
-                        scoreP2,
-                        userId,
-                        reportedWinner,
-                        matchId
-                    ]
-                );
-
-                const opponentId =
-                    userId === match.player1_id
-                        ? match.player2_id
-                        : match.player1_id;
-
-                const resultText = `<@${reportedWinner}> Thắng`;
-
-                // CẬP NHẬT TRỰC TIẾP TIN NHẮN CŨ (type: 7) VÀ KHÓA NÚT CHỌN KẾT QUẢ
-                return res
-                    .status(200)
-                    .json({
-                        type: 7,
-                        data: {
-                            embeds: [{
-                                title:
-                                    '⏳ CHỜ XÁC NHẬN KẾT QUẢ',
-
-                                description:
-                                    `<@${userId}> đã báo kết quả: **${resultText}**\n\n` +
-                                    `<@${opponentId}> vui lòng bấm **Xác nhận** nếu thông tin chính xác, hoặc **Khiếu nại** nếu có sai sót.`,
-
-                                color: 0xF1C40F
-                            }],
-                            components: [
-                                {
-                                    type: 1,
-                                    components: [
-                                        {
-                                            type: 2,
-                                            custom_id: `win_p1_${matchId}`,
-                                            label: 'Player 1 Thắng',
-                                            style: 1,
-                                            disabled: true
-                                        },
-                                        {
-                                            type: 2,
-                                            custom_id: `win_p2_${matchId}`,
-                                            label: 'Player 2 Thắng',
-                                            style: 1,
-                                            disabled: true
-                                        },
-                                        {
-                                            type: 2,
-                                            custom_id: `call_mod_${matchId}`,
-                                            label: '⚠️ Gọi Mod',
-                                            style: 4,
-                                            disabled: true
-                                        }
-                                    ]
-                                },
-                                {
-                                    type: 1,
-                                    components: [
-                                        {
-                                            type: 2,
-                                            custom_id: `confirm_match_${matchId}`,
-                                            label: 'Xác nhận ✅',
-                                            style: 3
-                                        },
-                                        {
-                                            type: 2,
-                                            custom_id: `dispute_match_${matchId}`,
-                                            label: 'Khiếu nại ❌',
-                                            style: 4
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    });
-            }
-
-            // ----------------------------------------------------
-            // CONFIRM RESULT
-            // ----------------------------------------------------
-
-            if (
-                customId.startsWith(
-                    'confirm_match_'
-                )
-            ) {
-
-                const matchId =
-                    customId.split('_')[2];
-
-                const matchRes =
-                    await pool.query(
-                        'SELECT * FROM matches WHERE match_id = $1',
-                        [matchId]
-                    );
-
-                const match =
-                    matchRes.rows[0];
-
-                if (!match) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '❌ Trận đấu không tồn tại!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                if (
-                    userId === match.reported_by
-                ) {
-                    return res
-                        .status(200)
-                        .json({
-                            type: 4,
-                            data: {
-                                content:
-                                    '❌ Bạn là người báo kết quả, hãy chờ đối thủ bấm xác nhận!',
-                                flags: 64
-                            }
-                        });
-                }
-
-                const winnerId =
-                    match.winner_id;
-
-                await pool.query(
-                    `
-                    UPDATE matches
-                    SET status = 'completed'
-                    WHERE match_id = $1
-                    `,
-                    [matchId]
-                );
-
-                if (winnerId === 'DRAW') {
-
-                    await pool.query(
-                        `
-                        UPDATE players
-                        SET draws = draws + 1
-                        WHERE discord_id = $1
-                        `,
-                        [match.player1_id]
-                    );
-
-                    await pool.query(
-                        `
-                        UPDATE players
-                        SET draws = draws + 1
-                        WHERE discord_id = $1
-                        `,
-                        [match.player2_id]
-                    );
-
-                } else if (winnerId) {
-
-                    const loserId =
-                        winnerId === match.player1_id
-                            ? match.player2_id
-                            : match.player1_id;
-
-                    await pool.query(
-                        `
-                        UPDATE players
-                        SET wins = wins + 1
-                        WHERE discord_id = $1
-                        `,
-                        [winnerId]
-                    );
-
-                    await pool.query(
-                        `
-                        UPDATE players
-                        SET losses = losses + 1
-                        WHERE discord_id = $1
-                        `,
-                        [loserId]
-                    );
-                }
-
-                const allPlayersRes =
-                    await pool.query(
-                        `
-                        SELECT
-                            discord_id,
-                            in_game_name,
-                            wins,
-                            losses,
-                            draws,
-                            (wins * 3 + draws) AS points
-                        FROM players
-                        ORDER BY points DESC, wins DESC
-                        `
-                    );
-
-                if (
-                    typeof exportStandingsToExcel ===
-                    'function'
-                ) {
-                    await exportStandingsToExcel(
-                        allPlayersRes.rows
-                    );
-                }
-
-                if (
-                    typeof exportMatchesByRoundToExcel ===
-                    'function'
-                ) {
-                    await exportMatchesByRoundToExcel();
-                }
-
-                const resultDisplay =
-                    winnerId === 'DRAW'
-                        ? '🤝 Hòa'
-                        : `🏆 Người thắng: <@${winnerId}>`;
-
-                return res
-                    .status(200)
-                    .json({
-                        type: 7,
-                        data: {
-
-                            embeds: [{
-                                title:
-                                    '🎉 TRẬN ĐẤU HOÀN TẤT',
-
-                                description:
-                                    `Kết quả đã được xác nhận!\n\n` +
-                                    `**${resultDisplay}**\n\n` +
-                                    `*Kênh đã hoàn tất.*`,
-
-                                color: 0x2ECC71
-                            }],
-
-                            components: []
-                        }
-                    });
-            }
-
-            // ----------------------------------------------------
-            // DISPUTE
-            // ----------------------------------------------------
-
-            if (
-                customId.startsWith(
-                    'dispute_match_'
-                )
-            ) {
-
-                return res
-                    .status(200)
-                    .json({
-                        type: 4,
-                        data: {
-                            content:
-                                '⚠️ **Đã gửi khiếu nại!** Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này.'
-                        }
-                    });
-            }
+            // Ủy quyền toàn bộ xử lý nút bấm sang matchHandler
+            return await handleMatchButton(req, res, customId, userId, pool);
         }
 
         return res
@@ -929,7 +429,6 @@ module.exports = async (req, res) => {
             });
 
     } catch (err) {
-
         console.error(
             '[SERVERLESS ERROR]:',
             err
@@ -951,13 +450,6 @@ async function executeLegacyCommand(
     command,
     interaction
 ) {
-
-    let responsePayload = null;
-
-    // ----------------------------------------------------------
-    // LẤY GUILD DISCORD.JS THẬT
-    // ----------------------------------------------------------
-
     let guild = null;
 
     if (interaction.guild_id) {
@@ -967,115 +459,72 @@ async function executeLegacyCommand(
             );
     }
 
-    // ----------------------------------------------------------
-    // MOCK INTERACTION
-    // ----------------------------------------------------------
-
     const mockInteraction = {
-
         ...interaction,
-
-        // Discord.js Client thật
-        client:
-            await getDiscordClient(),
-
-        // Discord.js Guild thật
+        client: await getDiscordClient(),
         guild,
-
-        // Các thông tin tương thích
-        guildId:
-            interaction.guild_id,
-
+        guildId: interaction.guild_id,
         channel:
             guild
                 ? guild.channels.cache.get(
                     interaction.channel_id
                 ) || {
-                    id:
-                        interaction.channel_id
+                    id: interaction.channel_id
                 }
                 : {
-                    id:
-                        interaction.channel_id
+                    id: interaction.channel_id
                 },
-
         user:
             interaction.member?.user ||
             interaction.user,
-
-        member:
-            interaction.member,
-
+        member: interaction.member,
         deferred: false,
-
         replied: false,
-
         options: {
-
             getInteger: (name) => {
-
                 const opt =
                     interaction
                         .data
                         .options
                         ?.find(
-                            o =>
-                                o.name === name
+                            o => o.name === name
                         );
-
                 return opt?.value;
             },
-
             getString: (name) => {
-
                 const opt =
                     interaction
                         .data
                         .options
                         ?.find(
-                            o =>
-                                o.name === name
+                            o => o.name === name
                         );
-
                 return opt?.value;
             },
-
             getUser: (name) => {
-
                 const opt =
                     interaction
                         .data
                         .options
                         ?.find(
-                            o =>
-                                o.name === name
+                            o => o.name === name
                         );
-
-                if (!opt) {
-                    return null;
-                }
-
+                if (!opt) return null;
                 return interaction
                     .data
                     .resolved
                     ?.users?.[opt.value] ||
                     null;
             },
-
             getAttachment: (name) => {
-
                 const opt =
                     interaction
                         .data
                         .options
                         ?.find(
-                            o =>
-                                o.name === name
+                            o => o.name === name
                         );
-
-                if (!opt) {
-                    return null;
-                }
+                if (!opt) return null;
 
                 const attachmentsObj =
                     interaction
@@ -1090,18 +539,14 @@ async function executeLegacyCommand(
                         attachmentsObj
                     )[0];
 
-                if (!attachment) {
-                    return null;
-                }
+                if (!attachment) return null;
 
                 return {
                     ...attachment,
-
                     name:
                         attachment.name ||
                         attachment.filename ||
                         '',
-
                     filename:
                         attachment.filename ||
                         attachment.name ||
@@ -1109,50 +554,24 @@ async function executeLegacyCommand(
                 };
             }
         },
-
-        // ------------------------------------------------------
-        // DISCORD.JS COMPATIBILITY
-        // ------------------------------------------------------
-
         async deferReply() {
-
-            // Interaction đã được ACK bằng
-            // type: 5 ở handler.
-            //
-            // Không gọi Discord lần nữa ở đây.
             this.deferred = true;
         },
-
         async reply(options) {
-
-            responsePayload =
-                options;
-
+            responsePayload = options;
             this.replied = true;
         },
-
         async editReply(options) {
-
-            responsePayload =
-                options;
-
+            responsePayload = options;
             this.replied = true;
         },
-
         async followUp(options) {
-
-            // Trong serverless flow hiện tại,
-            // followUp được xem như response cuối.
-            //
-            // Nếu command dùng followUp thay vì reply,
-            // vẫn đảm bảo original response được cập nhật.
-            responsePayload =
-                options;
-
+            responsePayload = options;
             this.replied = true;
         }
     };
 
+    let responsePayload = null;
     await command.execute(
         mockInteraction
     );
