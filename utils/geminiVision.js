@@ -4,7 +4,7 @@ const { GoogleGenAI } = require('@google/genai');
 // Khởi tạo Gemini client sử dụng biến môi trường GEMINI_API_KEY
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function analyzePokemonTeamImage(imageUrl) {
+async function analyzePokemonTeamImages(imageUrl) {
     try {
         // Tải hình ảnh từ URL (ví dụ URL đính kèm của Discord) dưới dạng buffer
         const imageResponse = await fetch(imageUrl);
@@ -100,4 +100,4 @@ async function analyzePokemonTeamImage(imageUrl) {
     }
 }
 
-module.exports = { analyzePokemonTeamImage };
+module.exports = { analyzePokemonTeamImages };
