@@ -32,7 +32,9 @@ async function analyzePokemonTeamImage(imageUrl) {
                     }
                 },
                 {
-                    text: `Hãy đọc chi tiết toàn bộ team Pokémon trong hình ảnh này (bao gồm: Tên Pokémon, Ability, Item và danh sách các chiêu thức/Moves của từng con). Không phân tích gì thêm`
+                    text: `Hãy đọc chi tiết toàn bộ team Pokémon trong hình ảnh này 
+                    - Nếu hình ảnh là Move&More, Hãy in ra tên Pokémon, ability, item và danh sách các chiêu thức của từng pokemon. Không phân tích gì thêm
+                    - Nếu hình ảnh là Stats, Hãy in ra tên tính cách của từng pokemon dựa vào mũi tên tăng giảm của các chỉ số`
                 }
             ]
         });
