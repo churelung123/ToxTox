@@ -514,7 +514,6 @@ module.exports = async (req, res) => {
             if (
                 customId.startsWith('win_p1_') ||
                 customId.startsWith('win_p2_') ||
-                customId.startsWith('draw_') ||
                 customId.startsWith('call_mod_')
             ) {
 
@@ -590,7 +589,7 @@ module.exports = async (req, res) => {
                 }
 
                 // ----------------------------------------------
-                // GỌI MOD
+                // GỌI MOD (Có tag Staff)
                 // ----------------------------------------------
 
                 if (
@@ -604,7 +603,7 @@ module.exports = async (req, res) => {
                             type: 4,
                             data: {
                                 content:
-                                    `⚠️ <@${userId}> đã yêu cầu trợ giúp. Ban Tổ Chức / Trọng tài sẽ vào kiểm tra bàn đấu này!`
+                                    `⚠️ <@${userId}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`
                             }
                         });
                 }
@@ -636,18 +635,6 @@ module.exports = async (req, res) => {
 
                     scoreP1 = 0;
                     scoreP2 = 1;
-
-                } else if (
-                    customId.startsWith(
-                        'draw_'
-                    )
-                ) {
-
-                    reportedWinner =
-                        'DRAW';
-
-                    scoreP1 = 0;
-                    scoreP2 = 0;
                 }
 
                 await pool.query(
@@ -675,17 +662,14 @@ module.exports = async (req, res) => {
                         ? match.player2_id
                         : match.player1_id;
 
-                const resultText =
-                    reportedWinner === 'DRAW'
-                        ? 'Hòa'
-                        : `<@${reportedWinner}> Thắng`;
+                const resultText = `<@${reportedWinner}> Thắng`;
 
+                // CẬP NHẬT TRỰC TIẾP TIN NHẮN CŨ (type: 7) VÀ KHÓA NÚT CHỌN KẾT QUẢ
                 return res
                     .status(200)
                     .json({
-                        type: 4,
+                        type: 7,
                         data: {
-
                             embeds: [{
                                 title:
                                     '⏳ CHỜ XÁC NHẬN KẾT QUẢ',
@@ -696,32 +680,51 @@ module.exports = async (req, res) => {
 
                                 color: 0xF1C40F
                             }],
-
-                            components: [{
-                                type: 1,
-
-                                components: [
-
-                                    {
-                                        type: 2,
-                                        custom_id:
-                                            `confirm_match_${matchId}`,
-                                        label:
-                                            'Xác nhận ✅',
-                                        style: 3
-                                    },
-
-                                    {
-                                        type: 2,
-                                        custom_id:
-                                            `dispute_match_${matchId}`,
-                                        label:
-                                            'Khiếu nại ❌',
-                                        style: 4
-                                    }
-
-                                ]
-                            }]
+                            components: [
+                                {
+                                    type: 1,
+                                    components: [
+                                        {
+                                            type: 2,
+                                            custom_id: `win_p1_${matchId}`,
+                                            label: 'Player 1 Thắng',
+                                            style: 1,
+                                            disabled: true
+                                        },
+                                        {
+                                            type: 2,
+                                            custom_id: `win_p2_${matchId}`,
+                                            label: 'Player 2 Thắng',
+                                            style: 1,
+                                            disabled: true
+                                        },
+                                        {
+                                            type: 2,
+                                            custom_id: `call_mod_${matchId}`,
+                                            label: '⚠️ Gọi Mod',
+                                            style: 4,
+                                            disabled: true
+                                        }
+                                    ]
+                                },
+                                {
+                                    type: 1,
+                                    components: [
+                                        {
+                                            type: 2,
+                                            custom_id: `confirm_match_${matchId}`,
+                                            label: 'Xác nhận ✅',
+                                            style: 3
+                                        },
+                                        {
+                                            type: 2,
+                                            custom_id: `dispute_match_${matchId}`,
+                                            label: 'Khiếu nại ❌',
+                                            style: 4
+                                        }
+                                    ]
+                                }
+                            ]
                         }
                     });
             }
