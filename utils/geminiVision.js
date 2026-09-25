@@ -33,8 +33,62 @@ async function analyzePokemonTeamImage(imageUrl) {
                 },
                 {
                     text: `Hãy đọc chi tiết toàn bộ team Pokémon trong hình ảnh này 
-                    - Nếu hình ảnh là Move&More, Hãy in ra tên Pokémon, ability, item và danh sách các chiêu thức của từng pokemon. Không phân tích gì thêm
-                    - Nếu hình ảnh là Stats, Hãy in ra tên tính cách của từng pokemon dựa vào mũi tên tăng giảm của các chỉ số`
+                    - Nếu hình ảnh là Move&More, lấy ra tên Pokémon, ability, item và danh sách các chiêu thức của từng pokemon.
+                    - Nếu hình ảnh là Stats, lấy ra tên tính cách của từng pokemon dựa vào mũi tên tăng giảm của các chỉ số
+                    In ra chỉ số theo dạng
+                "Froslass-Mega @ Froslassite
+                Ability: Snow Warning
+                Timid Nature
+
+                - Blizzard
+                - Protect
+                - Shadow Ball
+                - Aurora Veil
+
+                Sneasler @ White Herb
+                Ability: Unburden
+                Jolly Nature
+
+                - Close Combat
+                - Fake Out
+                - Dire Claw
+                - Protect
+
+                Arcanine-Hisui @ Focus Sash
+                Ability: Rock Head
+                Adamant Nature
+
+                - Flare Blitz
+                - Head Smash
+                - Extreme Speed
+                - Protect
+
+                Garchomp @ Life Orb
+                Ability: Rough Skin
+                Jolly Nature
+
+                - Dragon Claw
+                - Earthquake
+                - Rock Slide
+                - Protect
+
+                Rotom-Frost @ Choice Scarf
+                Ability: Levitate
+                Modest Nature
+
+                - Blizzard
+                - Discharge
+                - Volt Switch
+                - Electroweb
+
+                Kingambit @ Black Glasses
+                Ability: Defiant
+                Adamant Nature
+
+                - Sucker Punch
+                - Kowtow Cleave
+                - Iron Head
+                - Protect"`
                 }
             ]
         });
