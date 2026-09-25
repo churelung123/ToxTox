@@ -72,7 +72,7 @@ module.exports = {
 
             await rest.put(
                 Routes.applicationGuildCommands(
-                    process.env.DISCORD_CLIENT_ID,
+                    process.env.CLIENT_ID,
                     interaction.guildId
                 ),
                 { body }
