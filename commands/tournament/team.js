@@ -14,12 +14,12 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        // Vì AI phân tích ảnh có thể mất vài giây, dùng deferReply để bot hiển thị trạng thái đang suy nghĩ
         await interaction.deferReply();
 
+        // Sử dụng hàm getAttachment đã được hỗ trợ sẵn trong mockInteraction của bạn
         const attachment = interaction.options.getAttachment('image');
 
-        if (!attachment || !attachment.contentType?.startsWith('image/')) {
+        if (!attachment || !attachment.url) {
             return interaction.editReply('❌ Vui lòng đính kèm một tệp hình ảnh hợp lệ!');
         }
 
