@@ -4,6 +4,34 @@ const xlsx = require('xlsx');
 const { pool } = require('./database');
 
 /**
+ * Hàm phụ trợ: Chuyển đổi link Google Drive sang link tải/xem ảnh trực tiếp
+ */
+function convertGoogleDriveLink(url) {
+    if (!url || typeof url !== 'string' || !url.includes('drive.google.com')) {
+        return url;
+    }
+    
+    let fileId = '';
+    // Kiểm tra dạng /file/d/FILE_ID/view
+    const matchFileD = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (matchFileD && matchFileD[1]) {
+        fileId = matchFileD[1];
+    } else {
+        // Kiểm tra dạng ?id=FILE_ID hoặc /open?id=FILE_ID
+        const urlParams = new URLSearchParams(url.split('?')[1]);
+        if (urlParams.has('id')) {
+            fileId = urlParams.get('id');
+        }
+    }
+
+    if (fileId) {
+        // Sử dụng endpoint export=download để lấy trực tiếp tệp ảnh
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    return url;
+}
+
+/**
  * Đọc dữ liệu Tuyển thủ & Pairings từ file Excel
  *
  * Có thể nhận:
@@ -27,6 +55,14 @@ function readTournamentDataFromExcel(input) {
                 workbook.Sheets[workbook.SheetNames[0]]
             );
         }
+
+        // Tự động chuẩn hóa team_sheet_url nếu là link Google Drive
+        players = players.map(player => {
+            if (player.team_sheet_url) {
+                player.team_sheet_url = convertGoogleDriveLink(player.team_sheet_url);
+            }
+            return player;
+        });
 
         let pairings = [];
 
@@ -55,11 +91,6 @@ function readTournamentDataFromExcel(input) {
 
 /**
  * Xuất Bảng xếp hạng tổng ra Excel
- *
- * Lưu ý:
- * Hàm này vẫn dùng filesystem.
- * Không nên gọi trên Vercel Serverless nếu fileName
- * trỏ vào thư mục của project.
  */
 async function exportStandingsToExcel(data) {
     try {
@@ -82,7 +113,6 @@ async function exportStandingsToExcel(data) {
             'Standings'
         );
 
-        // Tạo file Excel trực tiếp trong memory
         const buffer = xlsx.write(workbook, {
             type: 'buffer',
             bookType: 'xlsx'
