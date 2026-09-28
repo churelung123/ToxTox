@@ -5,14 +5,25 @@ const { pool, createMatch } = require('./database');
  * Thuật toán ghép cặp hệ Thụy Sĩ (Swiss System)
  */
 async function generateNextRoundPairings(nextRound) {
-    // 1. Lấy danh sách tuyển thủ còn thi đấu (chưa dropped)
+    // Đặt ngưỡng điểm dừng (Ví dụ: Đạt 3 trận thắng sẽ hoàn thành vòng Swiss / vào vòng trong)
+    const WIN_THRESHOLD = 3;
+
+    // 1. Lấy danh sách tuyển thủ còn thi đấu, chưa bị drop VÀ CHƯA CHẠM MỐC ĐIỂM THẮNG
     const playersRes = await pool.query(`
         SELECT discord_id, in_game_name, wins, losses as points 
         FROM players 
-        WHERE is_dropped = 0 OR is_dropped IS NULL
+        WHERE (is_dropped = 0 OR is_dropped IS NULL)
+          AND wins < $1
         ORDER BY points DESC, wins DESC, RANDOM()
-    `);
+    `, [WIN_THRESHOLD]);
+    
     const players = playersRes.rows;
+
+    // Nếu số tuyển thủ còn lại quá ít (dưới 2 người), không cần ghép cặp vòng mới
+    if (players.length < 2) {
+        console.log(`[SWISS] Không đủ tuyển thủ để ghép cặp cho Round ${nextRound} (Các tuyển thủ còn lại đã đạt ngưỡng điểm thắng hoặc đã dừng).`);
+        return [];
+    }
 
     // 2. Thu thập lịch sử các cặp trận đã từng gặp nhau
     const pastMatchesRes = await pool.query(`SELECT player1_id, player2_id FROM matches`);
