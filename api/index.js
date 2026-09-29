@@ -409,14 +409,33 @@ module.exports = async (req, res) => {
         }
 
         // BUTTON / MESSAGE COMPONENT (GỌI QUA MATCH HANDLER)
+        // BUTTON / MESSAGE COMPONENT
         if (interaction.type === 3) {
             const customId = interaction.data.custom_id;
+
             const userId =
                 interaction.member?.user?.id ||
                 interaction.user?.id;
 
-            // Ủy quyền toàn bộ xử lý nút bấm sang matchHandler
-            return await handleMatchButton(req, res, customId, userId, pool);
+            // ACK Discord NGAY LẬP TỨC
+            res.status(200).json({
+                type: 6
+            });
+
+            const matchPromise = handleMatchButton(
+                interaction,
+                customId,
+                userId,
+                pool
+            );
+
+            if (typeof vercelWaitUntil === 'function') {
+                vercelWaitUntil(matchPromise);
+            } else {
+                await matchPromise;
+            }
+
+            return;
         }
 
         return res

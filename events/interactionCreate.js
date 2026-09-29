@@ -48,10 +48,17 @@ module.exports = {
                     return interaction.reply({ content: '⚠️ Bạn phải dùng lệnh `/gui-anh` để gửi bằng chứng trước khi chọn kết quả!', ephemeral: true });
                 }
 
-                if (match.status === 'completed') {
-                    return interaction.reply({ content: '✅ Trận đấu này đã kết thúc!', ephemeral: true });
+                if (
+                    match.status === "waiting_confirm" ||
+                    match.status === "completed"
+                ) {
+                    return sendFollowUp(
+                        match.status === "waiting_confirm"
+                            ? "⚠️ Kết quả trận đấu đang chờ đối thủ xác nhận."
+                            : "⚠️ Trận đấu đã kết thúc.",
+                        true
+                    );
                 }
-
                 // Xử lý nút "Gọi Mod"
                 if (customId.startsWith('call_mod_')) {
                     return interaction.reply({
@@ -83,7 +90,7 @@ module.exports = {
                 `, [scoreP1, scoreP2, interaction.user.id, reportedWinner, matchId]);
 
                 const opponentId = (interaction.user.id === match.player1_id) ? match.player2_id : match.player1_id;
-                const resultText = reportedWinner === `<@${reportedWinner}> Thắng`;
+                const resultText = `<@${reportedWinner}> Thắng`;
 
                 const confirmEmbed = new EmbedBuilder()
                     .setTitle('⏳ CHỜ XÁC NHẬN KẾT QUẢ')

@@ -4,14 +4,8 @@ const {
     exportMatchesByRoundToExcel
 } = require('../utils/excelHelper');
 
-async function handleMatchButton(req, res, customId, userId, pool) {
+async function handleMatchButton(interaction, customId, userId, pool) {
     try {
-        // Phản hồi Discord NGAY LẬP TỨC bằng type 6 (Deferred Update) 
-        // Giúp tránh tuyệt đối lỗi "Interaction failed" do quá 3 giây.
-        res.status(200).json({ type: 6 });
-
-        // Lấy thông tin application_id và token từ body request để gửi webhook update sau
-        const interaction = req.body;
         const applicationId = interaction.application_id;
         const interactionToken = interaction.token;
 
@@ -138,10 +132,21 @@ async function handleMatchButton(req, res, customId, userId, pool) {
 
             const winnerId = match.winner_id;
 
-            await pool.query(
-                `UPDATE matches SET status = 'completed' WHERE match_id = $1`,
+            const completeResult = await pool.query(
+                `UPDATE matches
+                SET status = 'completed'
+                WHERE match_id = $1
+                AND status = 'waiting_confirm'
+                RETURNING match_id`,
                 [matchId]
             );
+
+            if (completeResult.rowCount === 0) {
+                return sendFollowUp(
+                    "⚠️ Kết quả trận đấu này đã được xác nhận hoặc không còn ở trạng thái chờ xác nhận.",
+                    true
+                );
+            }
 
             if (winnerId) {
                 const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
@@ -219,7 +224,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                     content: '❌ Đã xảy ra lỗi khi xử lý tương tác nút bấm!',
                     flags: 64
                 })
-            }).catch(() => {});
+            }).catch(() => { });
         }
     }
 }
