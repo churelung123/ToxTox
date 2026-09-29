@@ -149,6 +149,26 @@ async function handleMatchButton(req, res, customId, userId, pool) {
                 await pool.query(`UPDATE players SET losses = losses + 1 WHERE discord_id = $1`, [loserId]);
             }
 
+            // ----------------------------------------------------
+            // MỚI: ĐỔI TÊN KÊNH CHAT THÀNH CÓ DẤU TICK XÁC NHẬN
+            // ----------------------------------------------------
+            try {
+                if (match.channel_id) {
+                    const guild = interaction.guild || req.client?.guilds?.cache?.get(match.guild_id);
+                    if (guild) {
+                        const channel = await guild.channels.fetch(match.channel_id).catch(() => null);
+                        if (channel) {
+                            let cleanName = channel.name;
+                            cleanName = cleanName.replace(/^(✅-|done-)/, '');
+                            await channel.setName(`✅-${cleanName}`);
+                        }
+                    }
+                }
+            } catch (channelErr) {
+                console.error('[RENAME CHANNEL ERROR]:', channelErr);
+            }
+            // ----------------------------------------------------
+
             const allPlayersRes = await pool.query(
                 `
                 SELECT discord_id, in_game_name, wins, losses AS points
@@ -170,7 +190,7 @@ async function handleMatchButton(req, res, customId, userId, pool) {
             await updateDiscordMessage({
                 embeds: [{
                     title: '🎉 TRẬN ĐẤU HOÀN TẤT',
-                    description: `Kết quả đã được xác nhận!\n\n**${resultDisplay}**\n\n*Kênh đã hoàn tất.*`,
+                    description: `Kết quả đã được xác nhận!\n\n.**${resultDisplay}**`,
                     color: 0x2ECC71
                 }],
                 components: []
