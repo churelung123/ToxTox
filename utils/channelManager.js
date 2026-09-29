@@ -377,7 +377,7 @@ async function createMatchChannels(
                     .setDescription(
 
                         `Hai người tự tổ chức trận đấu. ` +
-                        `Dùng lệnh \`/gui-anh\` đính kèm ảnh kết quả ` +
+                        `Dùng lệnh \`/gui-anh\` bằng bot <@1536768868226306068> đính kèm ảnh kết quả ` +
                         `để mở khóa các nút báo kết quả bên dưới.\n\n` +
 
                         `🆔 **Match ID (Ấn giữ / Chạm để copy)**\n` +
@@ -386,7 +386,8 @@ async function createMatchChannels(
                         `${match.match_id}` +
                         `\n\`\`\``
                     )
-                    .setColor(0xE67E22);
+                    .setColor(0xE67E22)
+                    .setImage('https://cdn.discordapp.com/attachments/1521070863862992906/1554432861439000596/IMG_6066.jpg?ex=6abcddea&is=6abb8c6a&hm=0b56fc66a3003409136266cc1677610fa5cee82bce8f88b7167da4ffe2186298&');
 
             // ------------------------------------------------
             // BUTTONS
