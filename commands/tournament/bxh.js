@@ -1,6 +1,6 @@
 // File: commands/bxh.js
 const { SlashCommandBuilder } = require('discord.js');
-const { generateLeaderboardEmbed } = require('../utils/leaderboardHelper');
+const { generateLeaderboardEmbed } = require('../../utils/leaderboardHelper');
 
 // Biến lưu trữ tạm thời message_id của bảng xếp hạng (hoặc bạn có thể lưu vào DB)
 let leaderboardMessageCache = { channelId: null, messageId: null };
