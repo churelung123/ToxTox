@@ -2,7 +2,7 @@
 const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { pool } = require('../utils/database');
 const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
-const { generateLeaderboardPage } = require('../utils/leaderboardHelper'); // Sửa lại đúng hàm phân trang V2
+const { generateLeaderboardPage } = require('../utils/leaderboardHelper');
 
 module.exports = {
     name: Events.InteractionCreate,
@@ -30,7 +30,6 @@ module.exports = {
         // 2. NÚT BẤM (BUTTONS)
         if (interaction.isButton()) {
             const customId = interaction.customId;
-            console.log(`[GLOBAL BUTTON DEBUG] Ai đó vừa bấm nút với customId: ${customId}`);
 
             // --- BÁO KẾT QUẢ BẰNG NÚT (P1 thắng / P2 thắng/ Gọi Mod) ---
             if (customId.startsWith('win_p1_') || customId.startsWith('win_p2_') || customId.startsWith('call_mod_')) {
@@ -46,7 +45,7 @@ module.exports = {
                     return interaction.reply({ content: '❌ Bạn không phải tuyển thủ trong trận đấu này!', ephemeral: true });
                 }
 
-                // Xử lý nút "Gọi Mod" (đặt trước kiểm tra is_proof_submitted nếu cần gọi khẩn cấp, hoặc giữ nguyên logic tùy ý)
+                // Xử lý nút "Gọi Mod"
                 if (customId.startsWith('call_mod_')) {
                     return interaction.reply({
                         content: `⚠️ <@${interaction.user.id}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`,
@@ -62,7 +61,6 @@ module.exports = {
                     match.status === "waiting_confirm" ||
                     match.status === "completed"
                 ) {
-                    // Sửa lỗi gọi hàm sendFollowUp không tồn tại thành interaction.reply
                     return interaction.reply({
                         content: match.status === "waiting_confirm"
                             ? "⚠️ Kết quả trận đấu đang chờ đối thủ xác nhận."
@@ -156,25 +154,6 @@ module.exports = {
                     await exportMatchesByRoundToExcel();
                 }
 
-                try {
-                    const bxhCommand = interaction.client.commands.get('bxh');
-                    if (bxhCommand && bxhCommand.leaderboardMessageCache && bxhCommand.leaderboardMessageCache.messageId) {
-                        const { channelId, messageId } = bxhCommand.leaderboardMessageCache;
-                        const targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
-                        if (targetChannel) {
-                            const targetMessage = await targetChannel.messages.fetch(messageId).catch(() => null);
-                            if (targetMessage) {
-                                const msgPayload = await generateLeaderboardPage(1); 
-                                if (msgPayload) {
-                                    await targetMessage.edit(msgPayload);
-                                }
-                            }
-                        }
-                    }
-                } catch (bxhErr) {
-                    console.error('[AUTO UPDATE BXH ERROR]:', bxhErr);
-                }
-
                 const resultDisplay = `🏆 Người thắng: <@${winnerId}>`;
 
                 const embedSuccess = new EmbedBuilder()
@@ -188,7 +167,7 @@ module.exports = {
             // --- ĐỐI THỦ BẤM "KHIẾU NẠI ❌" ---
             else if (customId.startsWith('dispute_match_')) {
                 return interaction.reply({
-                    content: `⚠️ **Đã gửi khiếu nại!** <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) sẽ vào kiểm tra bàn đấu này.`,
+                    content: `⚠️ **Đã gửi khiếu nại!** <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này.`,
                     ephemeral: false
                 });
             }
@@ -197,24 +176,18 @@ module.exports = {
             // --- XỬ LÝ NÚT CHUYỂN TRANG BẢNG XẾP HẠNG (BXH PAGINATION) ---
             // ========================================================
             else if (customId.startsWith('bxh_page_')) {
-                console.log(`[DEBUG BUTTON] Nhận được customId: ${customId} từ user: ${interaction.user.tag}`);
-                
                 const pageStr = customId.split('_')[2];
                 if (pageStr === 'info') {
                     return interaction.reply({ content: '📌 Đây là trang hiện tại của bảng xếp hạng.', ephemeral: true });
                 }
 
                 const targetPage = parseInt(pageStr, 10);
-                console.log(`[DEBUG BUTTON] Đang yêu cầu chuyển đến trang: ${targetPage}`);
-
                 const msgPayload = await generateLeaderboardPage(targetPage);
                 
                 if (!msgPayload) {
-                    console.log(`[DEBUG ERROR] generateLeaderboardPage trả về null/undefined cho trang ${targetPage}`);
                     return interaction.reply({ content: '❌ Không thể chuyển trang bảng xếp hạng.', ephemeral: true });
                 }
 
-                console.log(`[DEBUG SUCCESS] Đang gọi interaction.update cho trang ${targetPage}`);
                 return interaction.update(msgPayload);
             }
         }
