@@ -25,19 +25,7 @@ async function generateLeaderboardPage(page = 1) {
         const players = res.rows;
         const components = [];
 
-        if (players.length === 0) {
-            // Trường hợp không có dữ liệu, tạo một Action Row chứa text hoặc thông báo đơn giản
-        } else {
-            // Với mỗi thí sinh, ta tạo một Action Row (type: 1) chứa thông tin hoặc kết hợp nút bấm
-            // Lưu ý: Discord Action Row chứa tối đa 5 nút hoặc các component tương thích. 
-            // Để hiển thị tên thí sinh và nút xem Team Sheet trên cùng một hàng theo chuẩn Action Row,
-            // ta có thể dùng Button kiểu Link (Style 5) kèm nhãn là tên thí sinh/thứ hạng.
-            
-            let currentRow = {
-                type: 1, // Action Row bắt buộc ở cấp root
-                components: []
-            };
-
+        if (players.length > 0) {
             players.forEach((p, index) => {
                 const globalIndex = offset + index + 1;
                 let rankEmoji = '▫️';
@@ -46,28 +34,26 @@ async function generateLeaderboardPage(page = 1) {
                 else if (globalIndex === 3) rankEmoji = '🥉';
 
                 const playerName = p.in_game_name || 'User';
-                const label = `${rankEmoji} #${globalIndex}: ${playerName} (${p.wins}T/${p.losses}B)`;
+                
+                // Text hiển thị thông tin ở mỗi dòng (hoặc đưa vào label của nút)
+                const label = `${rankEmoji} #${globalIndex} — ${playerName} [${p.wins}-${p.losses}]`;
 
-                // Thêm button link vào hàng hiện tại (mỗi hàng tối đa 5 nút)
-                if (currentRow.components.length >= 5) {
-                    components.push(currentRow);
-                    currentRow = { type: 1, components: [] };
-                }
-
-                currentRow.components.push({
-                    type: 2, // Button component
-                    style: 5, // Link style
-                    label: label.substring(0, 80), // Giới hạn ký tự label của Discord button là 80
-                    url: p.team_sheet_url || 'https://discord.com'
+                // MỖI THÍ SINH LÀ MỘT ACTION ROW RIÊNG BIỆT ĐỂ NÓ NẰM TRÊN 1 DÒNG ĐỘC LẬP
+                components.push({
+                    type: 1, // Action Row
+                    components: [
+                        {
+                            type: 2, // Button
+                            style: 5, // Link style
+                            label: label.substring(0, 80), // Giới hạn tối đa 80 ký tự của Discord
+                            url: p.team_sheet_url || 'https://discord.com'
+                        }
+                    ]
                 });
             });
-
-            if (currentRow.components.length > 0) {
-                components.push(currentRow);
-            }
         }
 
-        // Thêm hàng nút điều hướng trang (Pagination Row) ở cuối
+        // Thêm hàng nút điều hướng trang (Pagination Row) ở cuối cùng
         const paginationRow = {
             type: 1,
             components: [
@@ -111,9 +97,8 @@ async function generateLeaderboardPage(page = 1) {
 
         components.push(paginationRow);
 
-        // Trả về nội dung dạng text thông báo kèm các hàng nút bấm trực quan
         return {
-            content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})\n*Bấm vào các nút bên dưới để xem trực tiếp Team Sheet của từng thí sinh:*`,
+            content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`,
             components: components
         };
     } catch (err) {
