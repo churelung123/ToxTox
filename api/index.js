@@ -4,6 +4,7 @@ const { verifyKey } = require('discord-interactions');
 const { Client, GatewayIntentBits } = require('discord.js');
 
 const { pool } = require('../utils/database');
+const { generateLeaderboardPage } = require('../utils/leaderboardHelper');
 
 // IMPORT MATCH HANDLER
 const { handleMatchButton } = require('../events/matchHandler');
@@ -295,7 +296,73 @@ async function processSlashCommand(
         }
     }
 }
+async function handleLeaderboardButton(interaction, customId) {
+    const applicationId = interaction.application_id;
+    const interactionToken = interaction.token;
 
+    if (!applicationId || !interactionToken) {
+        throw new Error(
+            'Thiếu application_id hoặc interaction token khi xử lý BXH'
+        );
+    }
+
+    // bxh_page_info
+    if (customId === 'bxh_page_info') {
+        const url =
+            `https://discord.com/api/v10/webhooks/` +
+            `${applicationId}/${interactionToken}`;
+
+        await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: '📌 Đây là trang hiện tại của bảng xếp hạng.',
+                flags: 64
+            })
+        });
+
+        return;
+    }
+
+    const pageStr = customId.replace('bxh_page_', '');
+    const targetPage = parseInt(pageStr, 10);
+
+    if (!Number.isInteger(targetPage) || targetPage < 1) {
+        throw new Error(
+            `Trang BXH không hợp lệ: ${pageStr}`
+        );
+    }
+
+    const payload = await generateLeaderboardPage(targetPage);
+
+    if (!payload) {
+        throw new Error(
+            `Không thể tạo payload BXH cho trang ${targetPage}`
+        );
+    }
+
+    const url =
+        `https://discord.com/api/v10/webhooks/` +
+        `${applicationId}/${interactionToken}/messages/@original`;
+
+    const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+
+        throw new Error(
+            `Discord BXH PATCH failed (${response.status}): ${errorText}`
+        );
+    }
+}
 // ============================================================
 // MAIN SERVERLESS HANDLER
 // ============================================================
@@ -409,7 +476,6 @@ module.exports = async (req, res) => {
             return;
         }
 
-        // BUTTON / MESSAGE COMPONENT (GỌI QUA MATCH HANDLER)
         // BUTTON / MESSAGE COMPONENT
         if (interaction.type === 3) {
             const customId = interaction.data.custom_id;
@@ -418,7 +484,68 @@ module.exports = async (req, res) => {
                 interaction.member?.user?.id ||
                 interaction.user?.id;
 
-            // ACK Discord NGAY LẬP TỨC
+            // ========================================================
+            // BXH PAGINATION
+            // ========================================================
+            if (
+                customId.startsWith('bxh_page_')
+            ) {
+                // ACK Discord NGAY LẬP TỨC
+                res.status(200).json({
+                    type: 6
+                });
+
+                const leaderboardPromise =
+                    handleLeaderboardButton(
+                        interaction,
+                        customId
+                    ).catch(async error => {
+                        console.error(
+                            '[BXH PAGINATION ERROR]:',
+                            error
+                        );
+
+                        try {
+                            const url =
+                                `https://discord.com/api/v10/webhooks/` +
+                                `${interaction.application_id}/` +
+                                `${interaction.token}`;
+
+                            await fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    content:
+                                        '❌ Không thể chuyển trang bảng xếp hạng. Vui lòng thử lại.',
+                                    flags: 64
+                                })
+                            });
+                        } catch (followUpError) {
+                            console.error(
+                                '[BXH FOLLOWUP ERROR]:',
+                                followUpError
+                            );
+                        }
+                    });
+
+                if (
+                    typeof vercelWaitUntil === 'function'
+                ) {
+                    vercelWaitUntil(
+                        leaderboardPromise
+                    );
+                } else {
+                    await leaderboardPromise;
+                }
+
+                return;
+            }
+
+            // ========================================================
+            // CÁC BUTTON TRẬN ĐẤU
+            // ========================================================
             res.status(200).json({
                 type: 6
             });
@@ -430,7 +557,9 @@ module.exports = async (req, res) => {
                 pool
             );
 
-            if (typeof vercelWaitUntil === 'function') {
+            if (
+                typeof vercelWaitUntil === 'function'
+            ) {
                 vercelWaitUntil(matchPromise);
             } else {
                 await matchPromise;
