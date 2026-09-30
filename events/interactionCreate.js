@@ -2,6 +2,7 @@
 const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { pool } = require('../utils/database');
 const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
+const { generateLeaderboardEmbed } = require('../utils/leaderboardHelper');
 
 module.exports = {
     name: Events.InteractionCreate,
@@ -150,6 +151,26 @@ module.exports = {
                 }
                 if (typeof exportMatchesByRoundToExcel === 'function') {
                     await exportMatchesByRoundToExcel();
+                }
+
+                try {
+                    const bxhCommand = interaction.client.commands.get('bxh');
+                    if (bxhCommand && bxhCommand.leaderboardMessageCache && bxhCommand.leaderboardMessageCache.messageId) {
+                        const { channelId, messageId } = bxhCommand.leaderboardMessageCache;
+                        const targetChannel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+                        if (targetChannel) {
+                            const targetMessage = await targetChannel.messages.fetch(messageId).catch(() => null);
+                            if (targetMessage) {
+                                // Gọi hàm generateLeaderboardEmbed (nhớ require hàm này ở đầu file)
+                                const newEmbed = await generateLeaderboardEmbed(); 
+                                if (newEmbed) {
+                                    await targetMessage.edit({ embeds: [newEmbed] });
+                                }
+                            }
+                        }
+                    }
+                } catch (bxhErr) {
+                    console.error('[AUTO UPDATE BXH ERROR]:', bxhErr);
                 }
 
                 const resultDisplay = `🏆 Người thắng: <@${winnerId}>`;

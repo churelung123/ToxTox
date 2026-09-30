@@ -83,6 +83,7 @@ const commandFiles = [
     require('../commands/tournament/startround'),
     require('../commands/tournament/vong-tiep-theo'),
     require('../commands/tournament/xoa-kenh-dau'),
+    require('../commands/tournament/bxh'),
     require('../commands/tournament/sync')
 ];
 
