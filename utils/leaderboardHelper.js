@@ -3,7 +3,7 @@ const { pool } = require('./database');
 
 async function generateLeaderboardPage(page = 1) {
     try {
-        const pageSize = 4; // Giới hạn 4 thí sinh mỗi trang để không vượt quá tối đa 5 Action Row của Discord
+        const pageSize = 5; // Số lượng tuyển thủ mỗi trang (tối ưu cho hiển thị Section V2)
         const offset = (page - 1) * pageSize;
 
         // Lấy tổng số lượng thí sinh
@@ -23,9 +23,27 @@ async function generateLeaderboardPage(page = 1) {
         `, [pageSize, offset]);
 
         const players = res.rows;
-        const components = [];
+        const containerComponents = [];
 
-        if (players.length > 0) {
+        // Tiêu đề đầu Container sử dụng Text Display (type: 10)
+        containerComponents.push({
+            type: 10,
+            content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`
+        });
+
+        // Thêm một đường kẻ phân cách (Separator - type: 14) nếu muốn giao diện gọn gàng
+        containerComponents.push({
+            type: 14,
+            spacing: 1,
+            divider: true
+        });
+
+        if (players.length === 0) {
+            containerComponents.push({
+                type: 10,
+                content: "Chưa có dữ liệu thí sinh nào."
+            });
+        } else {
             players.forEach((p, index) => {
                 const globalIndex = offset + index + 1;
                 let rankEmoji = '▫️';
@@ -35,72 +53,80 @@ async function generateLeaderboardPage(page = 1) {
 
                 const playerName = p.in_game_name || 'User';
                 
-                // Nhãn hiển thị trên nút bấm cho từng thí sinh
-                const label = `${rankEmoji} #${globalIndex} — ${playerName} [${p.wins}-${p.losses}]`;
-
-                // Mỗi thí sinh là 1 Action Row riêng biệt (chiếm 1 dòng)
-                components.push({
-                    type: 1, // Action Row
+                // Cấu trúc một Section (type: 9) cho mỗi thí sinh:
+                // Văn bản hiển thị tên và tỷ số nằm bên trái, nút bấm Team Sheet nằm ở accessory bên phải
+                containerComponents.push({
+                    type: 9, // Section Component
                     components: [
                         {
-                            type: 2, // Button
-                            style: 5, // Link style
-                            label: label.substring(0, 80), // Giới hạn tối đa 80 ký tự
-                            url: p.team_sheet_url || 'https://discord.com'
+                            type: 10, // Text Display Component
+                            content: `${rankEmoji} **#${globalIndex}:**${playerName}    \`[${p.wins}-${p.losses}]\``
                         }
-                    ]
+                    ],
+                    accessory: {
+                        type: 2, // Button Component
+                        style: 5, // Link Style
+                        label: 'Team Sheet',
+                        url: p.team_sheet_url || 'https://discord.com'
+                    }
                 });
             });
         }
 
-        // Hàng nút điều hướng trang (Pagination Row) ở cuối cùng (Action Row thứ 5)
-        const paginationRow = {
-            type: 1,
+        // Đóng gói toàn bộ vào Container chính (type: 17) kèm cờ Components V2 (flags: 32768)
+        const payload = {
+            flags: 32768, // IS_COMPONENTS_V2 flag bắt buộc để render các layout mới
             components: [
                 {
-                    type: 2,
-                    style: 2,
-                    custom_id: `bxh_page_1`,
-                    label: '⏪ Đầu',
-                    disabled: page === 1
+                    type: 17, // Container Component
+                    accent_color: 0x00AE86,
+                    components: containerComponents
                 },
+                // Hàng nút điều hướng trang phân trang đặt ở Action Row (type: 1) bên dưới Container
                 {
-                    type: 2,
-                    style: 1,
-                    custom_id: `bxh_page_${page - 1}`,
-                    label: '◀️ Trước',
-                    disabled: page <= 1
-                },
-                {
-                    type: 2,
-                    style: 2,
-                    custom_id: `bxh_page_info`,
-                    label: `Trang ${page}/${totalPages}`,
-                    disabled: true
-                },
-                {
-                    type: 2,
-                    style: 1,
-                    custom_id: `bxh_page_${page + 1}`,
-                    label: 'Sau ▶️',
-                    disabled: page >= totalPages
-                },
-                {
-                    type: 2,
-                    style: 2,
-                    custom_id: `bxh_page_${totalPages}`,
-                    label: 'Cuối ⏩',
-                    disabled: page === totalPages
+                    type: 1,
+                    components: [
+                        {
+                            type: 2,
+                            style: 2,
+                            custom_id: `bxh_page_1`,
+                            label: '⏪ Đầu',
+                            disabled: page === 1
+                        },
+                        {
+                            type: 2,
+                            style: 1,
+                            custom_id: `bxh_page_${page - 1}`,
+                            label: '◀️ Trước',
+                            disabled: page <= 1
+                        },
+                        {
+                            type: 2,
+                            style: 2,
+                            custom_id: `bxh_page_info`,
+                            label: `Trang ${page}/${totalPages}`,
+                            disabled: true
+                        },
+                        {
+                            type: 2,
+                            style: 1,
+                            custom_id: `bxh_page_${page + 1}`,
+                            label: 'Sau ▶️',
+                            disabled: page >= totalPages
+                        },
+                        {
+                            type: 2,
+                            style: 2,
+                            custom_id: `bxh_page_${totalPages}`,
+                            label: 'Cuối ⏩',
+                            disabled: page === totalPages
+                        }
+                    ]
                 }
             ]
         };
 
-        components.push(paginationRow);
-
-        return {
-            content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`,
-            components: components
-        };
+        return payload;
     } catch (err) {
         console.error('[LEADERBOARD ERROR]:', err);
         return null;
