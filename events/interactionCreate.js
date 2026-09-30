@@ -196,18 +196,24 @@ module.exports = {
             // --- XỬ LÝ NÚT CHUYỂN TRANG BẢNG XẾP HẠNG (BXH PAGINATION) ---
             // ========================================================
             else if (customId.startsWith('bxh_page_')) {
+                console.log(`[DEBUG BUTTON] Nhận được customId: ${customId} từ user: ${interaction.user.tag}`);
+                
                 const pageStr = customId.split('_')[2];
                 if (pageStr === 'info') {
                     return interaction.reply({ content: '📌 Đây là trang hiện tại của bảng xếp hạng.', ephemeral: true });
                 }
 
                 const targetPage = parseInt(pageStr, 10);
+                console.log(`[DEBUG BUTTON] Đang yêu cầu chuyển đến trang: ${targetPage}`);
+
                 const msgPayload = await generateLeaderboardPage(targetPage);
                 
                 if (!msgPayload) {
+                    console.log(`[DEBUG ERROR] generateLeaderboardPage trả về null/undefined cho trang ${targetPage}`);
                     return interaction.reply({ content: '❌ Không thể chuyển trang bảng xếp hạng.', ephemeral: true });
                 }
 
+                console.log(`[DEBUG SUCCESS] Đang gọi interaction.update cho trang ${targetPage}`);
                 return interaction.update(msgPayload);
             }
         }
