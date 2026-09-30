@@ -182,13 +182,29 @@ module.exports = {
                 }
 
                 const targetPage = parseInt(pageStr, 10);
-                const msgPayload = await generateLeaderboardPage(targetPage);
-                
-                if (!msgPayload) {
-                    return interaction.reply({ content: '❌ Không thể chuyển trang bảng xếp hạng.', ephemeral: true });
-                }
 
-                return interaction.update(msgPayload);
+                try {
+                    // 1. Phản hồi ngay lập tức với Discord để tránh timeout trên Vercel (trong vòng 3 giây)
+                    await interaction.deferUpdate();
+
+                    // 2. Query database và tạo payload trang mới
+                    const msgPayload = await generateLeaderboardPage(targetPage);
+
+                    if (!msgPayload) {
+                        return interaction.followUp({ content: '❌ Không thể tải trang bảng xếp hạng này.', ephemeral: true });
+                    }
+
+                    // 3. Chỉnh sửa lại tin nhắn gốc với dữ liệu mới
+                    return await interaction.editReply(msgPayload);
+                } catch (error) {
+                    console.error('[BXH PAGINATION ERROR]:', error);
+                    // Nếu lỡ timeout hoặc lỗi, gửi thông báo phụ cho người dùng biết
+                    if (!interaction.replied && !interaction.deferred) {
+                        return interaction.reply({ content: '❌ Có lỗi xảy ra khi chuyển trang.', ephemeral: true });
+                    } else {
+                        return interaction.followUp({ content: '❌ Có lỗi xảy ra khi chuyển trang.', ephemeral: true });
+                    }
+                }
             }
         }
     },
