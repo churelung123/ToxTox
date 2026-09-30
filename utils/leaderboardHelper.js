@@ -23,13 +23,20 @@ async function generateLeaderboardPage(page = 1) {
         `, [pageSize, offset]);
 
         const players = res.rows;
-
-        let contentText = `🏆 **BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})**\n` +
-                          `───────────────────────────────\n`;
+        const components = [];
 
         if (players.length === 0) {
-            contentText += `Chưa có dữ liệu thí sinh nào.`;
+            components.push({
+                type: 17, // Container component type
+                components: [
+                    {
+                        type: 14, // Text display block
+                        content: "Chưa có dữ liệu thí sinh nào."
+                    }
+                ]
+            });
         } else {
+            // Duyệt qua từng thí sinh để tạo các section/container riêng biệt hoặc gom nhóm
             players.forEach((p, index) => {
                 const globalIndex = offset + index + 1;
                 let rankEmoji = '▫️';
@@ -37,55 +44,52 @@ async function generateLeaderboardPage(page = 1) {
                 else if (globalIndex === 2) rankEmoji = '🥈';
                 else if (globalIndex === 3) rankEmoji = '🥉';
 
-                const playerName = p.in_game_name || `User`;
-                contentText += `${rankEmoji} **#${globalIndex}** — **${playerName}** | Thắng: **${p.wins}** | Thua: **${p.losses}** (<@${p.discord_id}>)\n`;
+                const playerName = p.in_game_name || 'User';
+                const displayText = `${rankEmoji} **#${globalIndex}** — **${playerName}** | Thắng: **${p.wins}** | Thua: **${p.losses}** (<@${p.discord_id}>)`;
+
+                // Tạo component dòng kèm nút bấm (Accessory Button hoặc Action Row đi kèm)
+                const rowComponents = [
+                    {
+                        type: 1, // Action Row
+                        components: [
+                            {
+                                type: 2, // Button
+                                style: 5, // Link style
+                                label: `TS #${globalIndex}`,
+                                url: p.team_sheet_url || 'https://discord.com' // Fallback nếu chưa có link
+                            }
+                        ]
+                    }
+                ];
+
+                components.push({
+                    type: 17, // Container / Section block
+                    accent_color: globalIndex === 1 ? 0xFFD700 : (globalIndex === 2 ? 0xC0C0C0 : (globalIndex === 3 ? 0xCD7F32 : 0x00AE86)),
+                    components: [
+                        {
+                            type: 14, // Text block
+                            content: displayText
+                        },
+                        ...rowComponents
+                    ]
+                });
             });
         }
 
-        contentText += `───────────────────────────────\n*Tổng số thí sinh: ${totalPlayers} | Cập nhật theo thời gian thực*`;
-
-        // Tạo danh sách các hàng nút bấm (Action Rows) dưới dạng Raw Payload
-        const rows = [];
-        let currentRow = {
-            type: 1, // ActionRow type
-            components: []
-        };
-
-        // Thêm các nút Link Team Sheet cho từng tuyển thủ trong trang này (tối đa 5 nút mỗi hàng)
-        players.forEach((p, index) => {
-            const globalIndex = offset + index + 1;
-            if (p.team_sheet_url) {
-                if (currentRow.components.length >= 5) {
-                    rows.push(currentRow);
-                    currentRow = { type: 1, components: [] };
-                }
-                currentRow.components.push({
-                    type: 2, // Button type
-                    style: 5, // Link button style
-                    label: `#${globalIndex}: ${p.in_game_name ? p.in_game_name.substring(0, 8) : 'Team Sheet'}`,
-                    url: p.team_sheet_url
-                });
-            }
-        });
-
-        if (currentRow.components.length > 0) {
-            rows.push(currentRow);
-        }
-
-        // Tạo hàng nút điều hướng phân trang (Pagination Row)
+        // Thêm hàng nút điều hướng trang (Pagination Row) ở cuối
         const paginationRow = {
             type: 1,
             components: [
                 {
                     type: 2,
-                    style: 2, // Secondary
+                    style: 2,
                     custom_id: `bxh_page_1`,
                     label: '⏪ Đầu',
                     disabled: page === 1
                 },
                 {
                     type: 2,
-                    style: 1, // Primary
+                    style: 1,
                     custom_id: `bxh_page_${page - 1}`,
                     label: '◀️ Trước',
                     disabled: page <= 1
@@ -114,15 +118,14 @@ async function generateLeaderboardPage(page = 1) {
             ]
         };
 
-        rows.push(paginationRow);
+        components.push(paginationRow);
 
-        // Trả về payload thô để gửi trực tiếp qua Discord API
+        // Trả về payload hoàn chỉnh không cần dùng Embed truyền thống nếu dùng cấu trúc Layout V2 hoàn toàn,
+        // hoặc kết hợp Embed ở trên cùng. Dưới đây là cấu trúc payload thuần component layout:
         return {
-            content: contentText,
-            components: rows,
-            allowed_mentions: { parse: [] }
+            content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`,
+            components: components
         };
-
     } catch (err) {
         console.error('[LEADERBOARD ERROR]:', err);
         return null;

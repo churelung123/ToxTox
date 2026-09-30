@@ -161,7 +161,6 @@ module.exports = {
                         if (targetChannel) {
                             const targetMessage = await targetChannel.messages.fetch(messageId).catch(() => null);
                             if (targetMessage) {
-                                // Gọi hàm tạo trang 1 kèm các nút bấm team sheet & phân trang mới nhất
                                 const msgPayload = await generateLeaderboardPage(1); 
                                 if (msgPayload) {
                                     await targetMessage.edit(msgPayload);
@@ -195,7 +194,7 @@ module.exports = {
             // ========================================================
             else if (customId.startsWith('bxh_page_')) {
                 const pageStr = customId.split('_')[2];
-                if (pageStr === 'info') return; // Nút hiển thị thông tin trang (đang disable) không cần xử lý
+                if (pageStr === 'info') return;
 
                 const targetPage = parseInt(pageStr, 10);
                 const msgPayload = await generateLeaderboardPage(targetPage);
@@ -204,7 +203,6 @@ module.exports = {
                     return interaction.reply({ content: '❌ Không thể chuyển trang bảng xếp hạng.', ephemeral: true });
                 }
 
-                // Cập nhật lại tin nhắn hiện tại với trang mới
                 return interaction.update(msgPayload);
             }
         }
