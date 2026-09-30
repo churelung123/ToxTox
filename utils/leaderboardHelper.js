@@ -1,5 +1,4 @@
 // File: utils/leaderboardHelper.js
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { pool } = require('./database');
 
 async function generateLeaderboardPage(page = 1) {
@@ -7,12 +6,11 @@ async function generateLeaderboardPage(page = 1) {
         const pageSize = 10;
         const offset = (page - 1) * pageSize;
 
-        // Lấy tổng số lượng thí sinh để tính tổng số trang
+        // Lấy tổng số lượng thí sinh
         const countRes = await pool.query('SELECT COUNT(*) FROM players');
         const totalPlayers = parseInt(countRes.rows[0].count, 10);
         const totalPages = Math.ceil(totalPlayers / pageSize) || 1;
 
-        // Đảm bảo page nằm trong khoảng hợp lệ
         if (page > totalPages) page = totalPages;
         if (page < 1) page = 1;
 
@@ -26,11 +24,11 @@ async function generateLeaderboardPage(page = 1) {
 
         const players = res.rows;
 
-        let description = '';
-        const components = [];
+        let contentText = `🏆 **BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})**\n` +
+                          `───────────────────────────────\n`;
 
         if (players.length === 0) {
-            description = 'Chưa có dữ liệu thí sinh nào.';
+            contentText += `Chưa có dữ liệu thí sinh nào.`;
         } else {
             players.forEach((p, index) => {
                 const globalIndex = offset + index + 1;
@@ -40,78 +38,91 @@ async function generateLeaderboardPage(page = 1) {
                 else if (globalIndex === 3) rankEmoji = '🥉';
 
                 const playerName = p.in_game_name || `User`;
-                description += `${rankEmoji} **#${globalIndex}** — **${playerName}** | Thắng: **${p.wins}** | Thua: **${p.losses}** (<@${p.discord_id}>)\n`;
+                contentText += `${rankEmoji} **#${globalIndex}** — **${playerName}** | Thắng: **${p.wins}** | Thua: **${p.losses}** (<@${p.discord_id}>)\n`;
             });
-
-            // Tạo các nút Link (Button Style.Link) cho từng thí sinh hiển thị ở trang này
-            // Discord cho phép tối đa 5 nút trên 1 ActionRow, nên ta chia thành các hàng (mỗi hàng tối đa 5 nút)
-            let currentRow = new ActionRowBuilder();
-            let buttonCount = 0;
-
-            players.forEach((p, index) => {
-                const globalIndex = offset + index + 1;
-                if (p.team_sheet_url) {
-                    if (buttonCount >= 5) {
-                        components.push(currentRow);
-                        currentRow = new ActionRowBuilder();
-                        buttonCount = 0;
-                    }
-
-                    const label = `TS #${globalIndex}: ${p.in_game_name ? p.in_game_name.substring(0, 10) : 'Link'}`;
-                    currentRow.addComponents(
-                        new ButtonBuilder()
-                            .setLabel(label)
-                            .setStyle(ButtonStyle.Link)
-                            .setURL(p.team_sheet_url)
-                    );
-                    buttonCount++;
-                }
-            });
-
-            if (buttonCount > 0) {
-                components.push(currentRow);
-            }
         }
 
-        // Tạo hàng nút điều hướng trang (Pagination Row)
-        const paginationRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`bxh_page_1`)
-                .setLabel('⏪ Đầu')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page === 1),
-            new ButtonBuilder()
-                .setCustomId(`bxh_page_${page - 1}`)
-                .setLabel('◀️ Trước')
-                .setStyle(ButtonStyle.Primary)
-                .setDisabled(page <= 1),
-            new ButtonBuilder()
-                .setCustomId(`bxh_page_info`)
-                .setLabel(`Trang ${page}/${totalPages}`)
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(true),
-            new ButtonBuilder()
-                .setCustomId(`bxh_page_${page + 1}`)
-                .setLabel('Sau ▶️')
-                .setStyle(ButtonStyle.Primary)
-                .setDisabled(page >= totalPages),
-            new ButtonBuilder()
-                .setCustomId(`bxh_page_${totalPages}`)
-                .setLabel('Cuối ⏩')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page === totalPages)
-        );
+        contentText += `───────────────────────────────\n*Tổng số thí sinh: ${totalPlayers} | Cập nhật theo thời gian thực*`;
 
-        components.push(paginationRow);
+        // Tạo danh sách các hàng nút bấm (Action Rows) dưới dạng Raw Payload
+        const rows = [];
+        let currentRow = {
+            type: 1, // ActionRow type
+            components: []
+        };
 
-        const embed = new EmbedBuilder()
-            .setTitle(`🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`)
-            .setDescription(description)
-            .setColor(0x00AE86)
-            .setTimestamp()
-            .setFooter({ text: `Tổng số thí sinh: ${totalPlayers} | Cập nhật theo thời gian thực` });
+        // Thêm các nút Link Team Sheet cho từng tuyển thủ trong trang này (tối đa 5 nút mỗi hàng)
+        players.forEach((p, index) => {
+            const globalIndex = offset + index + 1;
+            if (p.team_sheet_url) {
+                if (currentRow.components.length >= 5) {
+                    rows.push(currentRow);
+                    currentRow = { type: 1, components: [] };
+                }
+                currentRow.components.push({
+                    type: 2, // Button type
+                    style: 5, // Link button style
+                    label: `#${globalIndex}: ${p.in_game_name ? p.in_game_name.substring(0, 8) : 'Team Sheet'}`,
+                    url: p.team_sheet_url
+                });
+            }
+        });
 
-        return { embeds: [embed], components: components };
+        if (currentRow.components.length > 0) {
+            rows.push(currentRow);
+        }
+
+        // Tạo hàng nút điều hướng phân trang (Pagination Row)
+        const paginationRow = {
+            type: 1,
+            components: [
+                {
+                    type: 2,
+                    style: 2, // Secondary
+                    custom_id: `bxh_page_1`,
+                    label: '⏪ Đầu',
+                    disabled: page === 1
+                },
+                {
+                    type: 2,
+                    style: 1, // Primary
+                    custom_id: `bxh_page_${page - 1}`,
+                    label: '◀️ Trước',
+                    disabled: page <= 1
+                },
+                {
+                    type: 2,
+                    style: 2,
+                    custom_id: `bxh_page_info`,
+                    label: `Trang ${page}/${totalPages}`,
+                    disabled: true
+                },
+                {
+                    type: 2,
+                    style: 1,
+                    custom_id: `bxh_page_${page + 1}`,
+                    label: 'Sau ▶️',
+                    disabled: page >= totalPages
+                },
+                {
+                    type: 2,
+                    style: 2,
+                    custom_id: `bxh_page_${totalPages}`,
+                    label: 'Cuối ⏩',
+                    disabled: page === totalPages
+                }
+            ]
+        };
+
+        rows.push(paginationRow);
+
+        // Trả về payload thô để gửi trực tiếp qua Discord API
+        return {
+            content: contentText,
+            components: rows,
+            allowed_mentions: { parse: [] }
+        };
+
     } catch (err) {
         console.error('[LEADERBOARD ERROR]:', err);
         return null;
