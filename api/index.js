@@ -486,6 +486,94 @@ module.exports = async (req, res) => {
                 interaction.user?.id;
 
             // ========================================================
+            // MỞ BẢNG XẾP HẠNG TỪ MENU
+            // ========================================================
+            if (customId === 'btn_open_leaderboard') {
+                console.log('[BXH] Nhận nút mở bảng xếp hạng');
+
+                // ACK ngay lập tức, tránh Discord timeout 3 giây.
+                // flags: 64 = ephemeral
+                res.status(200).json({
+                    type: 5,
+                    data: {
+                        flags: 64
+                    }
+                });
+
+                const leaderboardPromise = (async () => {
+                    try {
+                        console.log('[BXH] Đang tạo leaderboard payload...');
+
+                        const payload = await generateLeaderboardPage(1);
+
+                        if (!payload) {
+                            throw new Error(
+                                'generateLeaderboardPage(1) trả về null'
+                            );
+                        }
+
+                        console.log('[BXH] Payload đã tạo, đang edit original...');
+
+                        const url =
+                            `https://discord.com/api/v10/webhooks/` +
+                            `${interaction.application_id}/` +
+                            `${interaction.token}/messages/@original`;
+
+                        const response = await fetch(url, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+
+                            throw new Error(
+                                `Discord BXH OPEN PATCH failed ` +
+                                `(${response.status}): ${errorText}`
+                            );
+                        }
+
+                        console.log('[BXH] Đã hiển thị bảng xếp hạng.');
+                    } catch (error) {
+                        console.error('[BXH OPEN ERROR]:', error);
+
+                        try {
+                            const url =
+                                `https://discord.com/api/v10/webhooks/` +
+                                `${interaction.application_id}/` +
+                                `${interaction.token}/messages/@original`;
+
+                            await fetch(url, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    content:
+                                        '❌ Không thể tải bảng xếp hạng lúc này.'
+                                })
+                            });
+                        } catch (followUpError) {
+                            console.error(
+                                '[BXH OPEN ERROR] Không thể gửi lỗi:',
+                                followUpError
+                            );
+                        }
+                    }
+                })();
+
+                if (typeof vercelWaitUntil === 'function') {
+                    vercelWaitUntil(leaderboardPromise);
+                } else {
+                    await leaderboardPromise;
+                }
+
+                return;
+            }
+            // ========================================================
             // BXH PAGINATION
             // ========================================================
             if (
