@@ -138,15 +138,6 @@ module.exports = {
                     await pool.query('UPDATE players SET losses = losses + 1 WHERE discord_id = $1', [loserId]);
                 }
 
-                // Khóa quyền gửi tin nhắn của 2 tuyển thủ trong kênh
-                await interaction.channel.permissionOverwrites.edit(match.player1_id, { SendMessages: false }).catch(() => null);
-                await interaction.channel.permissionOverwrites.edit(match.player2_id, { SendMessages: false }).catch(() => null);
-
-                // Xuất lại 2 file Excel (Standings & Lịch sử đối đầu theo vòng)
-                const allPlayersRes = await pool.query(
-                    'SELECT discord_id, in_game_name, wins, losses as points FROM players ORDER BY points DESC, wins DESC'
-                );
-
                 if (typeof exportStandingsToExcel === 'function') {
                     await exportStandingsToExcel(allPlayersRes.rows);
                 }
@@ -170,6 +161,21 @@ module.exports = {
                     content: `⚠️ **Đã gửi khiếu nại!** <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này.`,
                     ephemeral: false
                 });
+            }
+
+            // Menu
+            else if (customId === 'btn_open_leaderboard') {
+                // Gọi hàm tạo nội dung trang 1 của bảng xếp hạng (chuẩn V2 đã làm ở các bước trước)
+                const leaderboardPayload = await generateLeaderboardPage(1);
+
+                if (!leaderboardPayload) {
+                    return interaction.reply({ content: '❌ Không thể tải bảng xếp hạng lúc này.', ephemeral: true });
+                }
+
+                // Thêm thuộc tính ephemeral: true để chỉ mình người bấm nhìn thấy
+                leaderboardPayload.ephemeral = true;
+
+                return interaction.reply(leaderboardPayload);
             }
 
             // ========================================================
