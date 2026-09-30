@@ -1,27 +1,24 @@
-// File: commands/bxh.js
+// File: commands/tournament/bxh.js
 const { SlashCommandBuilder } = require('discord.js');
-const { generateLeaderboardEmbed } = require('../../utils/leaderboardHelper');
+const { generateLeaderboardPage } = require('../../utils/leaderboardHelper');
 
-// Biến lưu trữ tạm thời message_id của bảng xếp hạng (hoặc bạn có thể lưu vào DB)
 let leaderboardMessageCache = { channelId: null, messageId: null };
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('bxh')
-        .setDescription('Hiển thị và tạo bảng xếp hạng trực tiếp của giải đấu'),
+        .setDescription('Hiển thị bảng xếp hạng giải đấu phân trang và nút team sheet'),
 
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
 
-        const embed = await generateLeaderboardEmbed();
-        if (!embed) {
+        const msgPayload = await generateLeaderboardPage(1);
+        if (!msgPayload) {
             return interaction.editReply('❌ Lỗi khi tạo bảng xếp hạng!');
         }
 
-        // Gửi ra kênh hiện tại (hoặc kênh thông báo chung)
-        const sentMessage = await interaction.channel.send({ embeds: [embed] });
+        const sentMessage = await interaction.channel.send(msgPayload);
         
-        // Lưu lại để các trận đấu sau cập nhật vào đúng tin nhắn này
         leaderboardMessageCache.channelId = sentMessage.channel.id;
         leaderboardMessageCache.messageId = sentMessage.id;
 

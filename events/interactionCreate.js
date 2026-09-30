@@ -161,10 +161,10 @@ module.exports = {
                         if (targetChannel) {
                             const targetMessage = await targetChannel.messages.fetch(messageId).catch(() => null);
                             if (targetMessage) {
-                                // Gọi hàm generateLeaderboardEmbed (nhớ require hàm này ở đầu file)
-                                const newEmbed = await generateLeaderboardEmbed(); 
-                                if (newEmbed) {
-                                    await targetMessage.edit({ embeds: [newEmbed] });
+                                // Gọi hàm tạo trang 1 kèm các nút bấm team sheet & phân trang mới nhất
+                                const msgPayload = await generateLeaderboardPage(1); 
+                                if (msgPayload) {
+                                    await targetMessage.edit(msgPayload);
                                 }
                             }
                         }
@@ -189,6 +189,23 @@ module.exports = {
                     content: `⚠️ **Đã gửi khiếu nại!** <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) sẽ vào kiểm tra bàn đấu này.`,
                     ephemeral: false
                 });
+            }
+            // ========================================================
+            // --- XỬ LÝ NÚT CHUYỂN TRANG BẢNG XẾP HẠNG (BXH PAGINATION) ---
+            // ========================================================
+            else if (customId.startsWith('bxh_page_')) {
+                const pageStr = customId.split('_')[2];
+                if (pageStr === 'info') return; // Nút hiển thị thông tin trang (đang disable) không cần xử lý
+
+                const targetPage = parseInt(pageStr, 10);
+                const msgPayload = await generateLeaderboardPage(targetPage);
+                
+                if (!msgPayload) {
+                    return interaction.reply({ content: '❌ Không thể chuyển trang bảng xếp hạng.', ephemeral: true });
+                }
+
+                // Cập nhật lại tin nhắn hiện tại với trang mới
+                return interaction.update(msgPayload);
             }
         }
     },
