@@ -52,7 +52,7 @@ async function generateLeaderboardPage(page = 1) {
                 else if (globalIndex === 3) rankEmoji = '🥉';
 
                 const playerName = p.in_game_name || 'User';
-                
+
                 // Cấu trúc một Section (type: 9) cho mỗi thí sinh:
                 // Văn bản hiển thị tên và tỷ số nằm bên trái, nút bấm Team Sheet nằm ở accessory bên phải
                 containerComponents.push({
@@ -89,7 +89,7 @@ async function generateLeaderboardPage(page = 1) {
                         {
                             type: 2,
                             style: 2,
-                            custom_id: `bxh_page_1`,
+                            custom_id: 'bxh_page_1',
                             label: '⏪ Đầu',
                             disabled: page === 1
                         },
@@ -103,7 +103,7 @@ async function generateLeaderboardPage(page = 1) {
                         {
                             type: 2,
                             style: 2,
-                            custom_id: `bxh_page_info`,
+                            custom_id: 'bxh_page_info',
                             label: `Trang ${page}/${totalPages}`,
                             disabled: true
                         },
@@ -121,7 +121,11 @@ async function generateLeaderboardPage(page = 1) {
                             label: 'Cuối ⏩',
                             disabled: page === totalPages
                         }
-                    ]
+                    ].filter((button, index, array) =>
+                        array.findIndex(
+                            item => item.custom_id === button.custom_id
+                        ) === index
+                    )
                 }
             ]
         };
