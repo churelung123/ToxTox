@@ -3,7 +3,7 @@ const { pool } = require('./database');
 
 async function generateLeaderboardPage(page = 1) {
     try {
-        const pageSize = 5; 
+        const pageSize = 5; // Số lượng tuyển thủ mỗi trang (tối ưu cho hiển thị Section V2)
         const offset = (page - 1) * pageSize;
 
         // Lấy tổng số lượng thí sinh
@@ -13,8 +13,6 @@ async function generateLeaderboardPage(page = 1) {
 
         if (page > totalPages) page = totalPages;
         if (page < 1) page = 1;
-
-        console.log(`[HELPER DEBUG] Tổng thí sinh: ${totalPlayers}, Tổng số trang: ${totalPages}, Đang tải trang: ${page}`);
 
         // Lấy danh sách thí sinh phân trang
         const res = await pool.query(`
@@ -27,11 +25,13 @@ async function generateLeaderboardPage(page = 1) {
         const players = res.rows;
         const containerComponents = [];
 
+        // Tiêu đề đầu Container sử dụng Text Display (type: 10)
         containerComponents.push({
             type: 10,
             content: `### 🏆 BẢNG XẾP HẠNG GIẢI ĐẤU (Trang ${page}/${totalPages})`
         });
 
+        // Thêm một đường kẻ phân cách (Separator - type: 14) nếu muốn giao diện gọn gàng
         containerComponents.push({
             type: 14,
             spacing: 1,
@@ -53,6 +53,8 @@ async function generateLeaderboardPage(page = 1) {
 
                 const playerName = p.in_game_name || 'User';
                 
+                // Cấu trúc một Section (type: 9) cho mỗi thí sinh:
+                // Văn bản hiển thị tên và tỷ số nằm bên trái, nút bấm Team Sheet nằm ở accessory bên phải
                 containerComponents.push({
                     type: 9, // Section Component
                     components: [
@@ -71,14 +73,16 @@ async function generateLeaderboardPage(page = 1) {
             });
         }
 
+        // Đóng gói toàn bộ vào Container chính (type: 17) kèm cờ Components V2 (flags: 32768)
         const payload = {
-            flags: 32768, // IS_COMPONENTS_V2 flag
+            flags: 32768, // IS_COMPONENTS_V2 flag bắt buộc để render các layout mới
             components: [
                 {
                     type: 17, // Container Component
                     accent_color: 0x00AE86,
                     components: containerComponents
                 },
+                // Hàng nút điều hướng trang phân trang đặt ở Action Row (type: 1) bên dưới Container
                 {
                     type: 1,
                     components: [
@@ -114,7 +118,7 @@ async function generateLeaderboardPage(page = 1) {
                             type: 2,
                             style: 2,
                             custom_id: `bxh_page_${totalPages}`,
-                            label: `Cuối ⏩`,
+                            label: 'Cuối ⏩',
                             disabled: page === totalPages
                         }
                     ]
@@ -124,7 +128,7 @@ async function generateLeaderboardPage(page = 1) {
 
         return payload;
     } catch (err) {
-        console.error('[LEADERBOARD HELPER ERROR]:', err);
+        console.error('[LEADERBOARD ERROR]:', err);
         return null;
     }
 }

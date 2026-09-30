@@ -30,6 +30,7 @@ module.exports = {
         // 2. NÚT BẤM (BUTTONS)
         if (interaction.isButton()) {
             const customId = interaction.customId;
+            console.log(`[GLOBAL BUTTON DEBUG] Ai đó vừa bấm nút với customId: ${customId}`);
 
             // --- BÁO KẾT QUẢ BẰNG NÚT (P1 thắng / P2 thắng/ Gọi Mod) ---
             if (customId.startsWith('win_p1_') || customId.startsWith('win_p2_') || customId.startsWith('call_mod_')) {
