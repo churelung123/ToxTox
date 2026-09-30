@@ -2,7 +2,7 @@
 const { Events, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { pool } = require('../utils/database');
 const { exportStandingsToExcel, exportMatchesByRoundToExcel } = require('../utils/excelHelper');
-const { generateLeaderboardEmbed } = require('../utils/leaderboardHelper');
+const { generateLeaderboardPage } = require('../utils/leaderboardHelper'); // Sửa lại đúng hàm phân trang V2
 
 module.exports = {
     name: Events.InteractionCreate,
@@ -45,6 +45,14 @@ module.exports = {
                     return interaction.reply({ content: '❌ Bạn không phải tuyển thủ trong trận đấu này!', ephemeral: true });
                 }
 
+                // Xử lý nút "Gọi Mod" (đặt trước kiểm tra is_proof_submitted nếu cần gọi khẩn cấp, hoặc giữ nguyên logic tùy ý)
+                if (customId.startsWith('call_mod_')) {
+                    return interaction.reply({
+                        content: `⚠️ <@${interaction.user.id}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`,
+                        ephemeral: false
+                    });
+                }
+
                 if (match.is_proof_submitted !== 1) {
                     return interaction.reply({ content: '⚠️ Bạn phải dùng lệnh `/gui-anh` để gửi bằng chứng trước khi chọn kết quả!', ephemeral: true });
                 }
@@ -53,18 +61,12 @@ module.exports = {
                     match.status === "waiting_confirm" ||
                     match.status === "completed"
                 ) {
-                    return sendFollowUp(
-                        match.status === "waiting_confirm"
+                    // Sửa lỗi gọi hàm sendFollowUp không tồn tại thành interaction.reply
+                    return interaction.reply({
+                        content: match.status === "waiting_confirm"
                             ? "⚠️ Kết quả trận đấu đang chờ đối thủ xác nhận."
                             : "⚠️ Trận đấu đã kết thúc.",
-                        true
-                    );
-                }
-                // Xử lý nút "Gọi Mod"
-                if (customId.startsWith('call_mod_')) {
-                    return interaction.reply({
-                        content: `⚠️ <@${userId}> đã yêu cầu trợ giúp. <@&1534802354480746656> (Ban Tổ Chức / Trọng tài) hãy vào kiểm tra bàn đấu này ngay!`,
-                        ephemeral: false
+                        ephemeral: true
                     });
                 }
 
@@ -189,12 +191,15 @@ module.exports = {
                     ephemeral: false
                 });
             }
+
             // ========================================================
             // --- XỬ LÝ NÚT CHUYỂN TRANG BẢNG XẾP HẠNG (BXH PAGINATION) ---
             // ========================================================
             else if (customId.startsWith('bxh_page_')) {
                 const pageStr = customId.split('_')[2];
-                if (pageStr === 'info') return;
+                if (pageStr === 'info') {
+                    return interaction.reply({ content: '📌 Đây là trang hiện tại của bảng xếp hạng.', ephemeral: true });
+                }
 
                 const targetPage = parseInt(pageStr, 10);
                 const msgPayload = await generateLeaderboardPage(targetPage);
