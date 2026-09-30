@@ -3,7 +3,7 @@ const { pool } = require('./database');
 
 async function generateLeaderboardPage(page = 1) {
     try {
-        const pageSize = 10;
+        const pageSize = 4; // Giới hạn 4 thí sinh mỗi trang để không vượt quá tối đa 5 Action Row của Discord
         const offset = (page - 1) * pageSize;
 
         // Lấy tổng số lượng thí sinh
@@ -35,17 +35,17 @@ async function generateLeaderboardPage(page = 1) {
 
                 const playerName = p.in_game_name || 'User';
                 
-                // Text hiển thị thông tin ở mỗi dòng (hoặc đưa vào label của nút)
+                // Nhãn hiển thị trên nút bấm cho từng thí sinh
                 const label = `${rankEmoji} #${globalIndex} — ${playerName} [${p.wins}-${p.losses}]`;
 
-                // MỖI THÍ SINH LÀ MỘT ACTION ROW RIÊNG BIỆT ĐỂ NÓ NẰM TRÊN 1 DÒNG ĐỘC LẬP
+                // Mỗi thí sinh là 1 Action Row riêng biệt (chiếm 1 dòng)
                 components.push({
                     type: 1, // Action Row
                     components: [
                         {
                             type: 2, // Button
                             style: 5, // Link style
-                            label: label.substring(0, 80), // Giới hạn tối đa 80 ký tự của Discord
+                            label: label.substring(0, 80), // Giới hạn tối đa 80 ký tự
                             url: p.team_sheet_url || 'https://discord.com'
                         }
                     ]
@@ -53,7 +53,7 @@ async function generateLeaderboardPage(page = 1) {
             });
         }
 
-        // Thêm hàng nút điều hướng trang (Pagination Row) ở cuối cùng
+        // Hàng nút điều hướng trang (Pagination Row) ở cuối cùng (Action Row thứ 5)
         const paginationRow = {
             type: 1,
             components: [
